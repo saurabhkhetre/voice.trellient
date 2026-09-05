@@ -1,0 +1,12 @@
+// LiveKit Cloud agent deployment metadata.
+// `lk agent create` fills in [project] and [agent].id on first deploy;
+// commit the updated file so later `lk agent deploy` runs target the same agent.
+[project]
+  subdomain = "REPLACE_WITH_YOUR_LIVEKIT_SUBDOMAIN"
+
+[agent]
+  id = ""
+  name = "voice-ai-agent"
+
+[agent.build]
+  dockerfile = "Dockerfile"

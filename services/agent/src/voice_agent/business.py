@@ -332,11 +332,13 @@ class BusinessClient:
         room_name: str,
         caller_number: str | None,
         customer_id: str | None = None,
+        agent_config_id: str | None = None,
     ) -> str:
         created = await self._post(
             "calls",
             {
                 "business_id": business_id,
+                "agent_config_id": agent_config_id,
                 "customer_id": customer_id,
                 "provider": provider,
                 "provider_call_id": room_name,

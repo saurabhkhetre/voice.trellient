@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from voice_agent.config import AgentConfig
+from voice_agent.config import InfraConfig
 from voice_agent.providers.base import (
     ProviderNotConfigured,
     RealtimeModelProvider,
@@ -16,14 +16,19 @@ PROVIDERS: dict[str, type[RealtimeModelProvider]] = {
 }
 
 
-def build_provider(config: AgentConfig) -> RealtimeModelProvider:
-    """Resolves REALTIME_PROVIDER to a provider instance."""
-    provider_cls = PROVIDERS.get(config.provider)
+def build_provider(infra: InfraConfig, provider_name: str | None = None) -> RealtimeModelProvider:
+    """Resolves a provider name to a provider instance.
+
+    If provider_name is given (from DB agent_configs.model_provider), use that.
+    Otherwise fall back to infra.default_provider (from env REALTIME_PROVIDER).
+    """
+    name = provider_name or infra.default_provider
+    provider_cls = PROVIDERS.get(name)
     if provider_cls is None:
         raise ProviderNotConfigured(
-            f"Unknown provider '{config.provider}'. Available: {', '.join(sorted(PROVIDERS))}"
+            f"Unknown provider '{name}'. Available: {', '.join(sorted(PROVIDERS))}"
         )
-    provider = provider_cls(config)
+    provider = provider_cls(infra)
     provider.validate()
     return provider
 

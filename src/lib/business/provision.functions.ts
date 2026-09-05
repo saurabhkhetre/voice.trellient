@@ -1,19 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { AuthContext } from "@/lib/supabase/auth-context";
+import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 
 /**
  * Creates a workspace for the signed-in user when they are not a member of one
  * yet, and makes them its owner. Idempotent: returns the existing membership.
  */
 export const provisionWorkspace = createServerFn({ method: "POST" })
-  // @ts-expect-error -- TanStack Start beta: middleware type inference is incomplete
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context: _ctx }) => {
-    const ctx = _ctx as unknown as AuthContext;
+  .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const userId = ctx.userId;
+    const userId = context.userId;
 
     const existing = await supabaseAdmin
       .from("business_users")
@@ -24,7 +21,7 @@ export const provisionWorkspace = createServerFn({ method: "POST" })
     if (existing.error) throw new Error(existing.error.message);
     if (existing.data) return { businessId: existing.data.business_id, created: false };
 
-    const email = (ctx.claims as { email?: string } | null)?.email ?? null;
+    const email = (context.claims as Record<string, unknown> & { email?: string })?.email ?? null;
     const business = await supabaseAdmin
       .from("businesses")
       .insert({

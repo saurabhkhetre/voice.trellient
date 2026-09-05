@@ -22,25 +22,25 @@ def main() -> None:
     logger = setup_logging()
 
     try:
-        config = load_config()
+        infra = load_config()
     except ConfigError as exc:
         log_event(logger, "agent.config_invalid", missing=exc.missing)
         raise SystemExit(
             "Missing configuration: " + ", ".join(exc.missing) + ". See .env.example."
         ) from exc
 
-    log_event(logger, "agent.started", **config.redacted)
+    log_event(logger, "agent.started", **infra.redacted)
 
     async def job(ctx: JobContext) -> None:
-        await entrypoint(ctx, config)
+        await entrypoint(ctx, infra)
 
     try:
         cli.run_app(
             WorkerOptions(
                 entrypoint_fnc=functools.partial(job),
-                ws_url=config.livekit_url,
-                api_key=config.livekit_api_key,
-                api_secret=config.livekit_api_secret,
+                ws_url=infra.livekit_url,
+                api_key=infra.livekit_api_key,
+                api_secret=infra.livekit_api_secret,
             )
         )
     finally:

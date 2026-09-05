@@ -17,10 +17,10 @@ from typing import Any
 from livekit.agents import Agent, AgentSession, JobContext, RoomInputOptions
 
 from voice_agent.business import BusinessClient, BusinessContext, BusinessDataError
-from voice_agent.config import AgentConfig
+from voice_agent.config import CallConfig, InfraConfig
 from voice_agent.logging_setup import log_event
 from voice_agent.prompts import AGENT_NAME, SYSTEM_PROMPT, build_instructions
-from voice_agent.providers import RealtimeModelProvider, build_provider
+from voice_agent.providers import build_provider
 from voice_agent.tools import build_tools
 
 logger = logging.getLogger("voice_agent.agent")
@@ -37,7 +37,7 @@ class VoiceAgent(Agent):
 
 
 def read_job_metadata(ctx: JobContext) -> dict[str, Any]:
-    """Reads {business_id, call_id, caller_number} from room metadata or job payload."""
+    """Reads {business_id, call_id, caller_number, agent_config_id} from room metadata or job payload."""
     for raw in (getattr(ctx.job, "metadata", None), getattr(ctx.room, "metadata", None)):
         if not raw:
             continue
@@ -51,12 +51,12 @@ def read_job_metadata(ctx: JobContext) -> dict[str, Any]:
 class ConversationManager:
     """Owns one realtime conversation: session start, greeting, teardown."""
 
-    def __init__(self, config: AgentConfig, provider: RealtimeModelProvider) -> None:
-        self.config = config
-        self.provider = provider
+    def __init__(self, infra: InfraConfig) -> None:
+        self.infra = infra
         self.session: AgentSession | None = None
         self.client: BusinessClient | None = None
         self.business: BusinessContext | None = None
+        self.call_config: CallConfig | None = None
         self.started_at = time.monotonic()
         self.turns: list[tuple[str, str]] = []
 
@@ -87,6 +87,7 @@ class ConversationManager:
                     room_name=ctx.room.name,
                     caller_number=business.caller_number,
                     customer_id=business.customer_id,
+                    agent_config_id=metadata.get("agent_config_id"),
                 )
         self.business = business
         log_event(
@@ -104,21 +105,35 @@ class ConversationManager:
 
         instructions = SYSTEM_PROMPT
         tools: list[Any] = []
-        greeting = self.config.greeting
-        if business is not None and self.client is not None:
+        greeting = self.infra.default_greeting
+
+        # Build per-call config from DB agent_configs row
+        if business is not None and business.config:
+            self.call_config = CallConfig.from_db(business.config, self.infra)
             instructions = build_instructions(business.config, business.business)
-            tools = build_tools(self.client, business)
-            greeting = business.config.get("greeting") or greeting
+            if self.client is not None:
+                tools = build_tools(self.client, business)
+            greeting = self.call_config.greeting
+        else:
+            self.call_config = CallConfig(
+                provider=self.infra.default_provider,
+                model=self.infra.default_model,
+                voice=self.infra.default_voice,
+                greeting=self.infra.default_greeting,
+            )
+
+        # Build provider dynamically from the DB config's model_provider
+        provider = build_provider(self.infra, self.call_config.provider)
 
         log_event(
             logger,
             "model.started",
-            **self.provider.describe(),
+            **provider.describe(self.call_config),
             room=ctx.room.name,
             tools=len(tools),
         )
 
-        session = AgentSession(llm=self.provider.create_model())
+        session = AgentSession(llm=provider.create_model(self.call_config))
         self.session = session
         self._attach_listeners(session, ctx)
 
@@ -229,10 +244,9 @@ class ConversationManager:
             self.session = None
 
 
-async def entrypoint(ctx: JobContext, config: AgentConfig) -> None:
+async def entrypoint(ctx: JobContext, infra: InfraConfig) -> None:
     """Job entrypoint: connect to the room and run one conversation."""
-    provider = build_provider(config)
-    manager = ConversationManager(config, provider)
+    manager = ConversationManager(infra)
 
     await ctx.connect()
     log_event(logger, "room.connected", room=ctx.room.name)

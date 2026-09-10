@@ -18,7 +18,7 @@ import {
   type TranscriptEntry,
 } from "@/lib/voice/contract";
 
-const AGENT_WAIT_MS = 15_000;
+const AGENT_WAIT_MS = 30_000;
 
 /** SessionManager + AgentStateManager for the in-dashboard web test call. */
 export function useVoiceSession() {
@@ -48,7 +48,13 @@ export function useVoiceSession() {
     setAgentState("unknown");
     setLevel(0);
     setStatus("disconnected");
-    if (room) await room.disconnect();
+    if (room) {
+      // Stop all local media tracks to release microphone
+      for (const pub of room.localParticipant.audioTrackPublications.values()) {
+        pub.track?.mediaStreamTrack?.stop();
+      }
+      await room.disconnect();
+    }
   }, []);
 
   const connect = useCallback(

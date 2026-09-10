@@ -41,6 +41,9 @@ export type Database = {
           updated_at: string
           voice_name: string
           voice_speed: number
+          version: number
+          is_draft: boolean
+          published_at: string | null
         }
         Insert: {
           after_hours_response?: string | null
@@ -544,6 +547,16 @@ export type Database = {
           status: Database["public"]["Enums"]["call_status"]
           summary: string | null
           tools_used: string[]
+          room_name: string | null
+          phone_number_id: string | null
+          sentiment: string | null
+          telephony_cost: number | null
+          livekit_cost: number | null
+          llm_cost: number | null
+          stt_cost: number | null
+          tts_cost: number | null
+          total_cost: number | null
+          currency: string
         }
         Insert: {
           agent_config_id?: string | null
@@ -1098,6 +1111,268 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "services_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      alert_rules: {
+        Row: {
+          id: string
+          business_id: string
+          name: string
+          condition_type: string
+          condition_config: Json
+          notification_channels: Json
+          enabled: boolean
+          last_triggered_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          name: string
+          condition_type: string
+          condition_config?: Json
+          notification_channels?: Json
+          enabled?: boolean
+          last_triggered_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          name?: string
+          condition_type?: string
+          condition_config?: Json
+          notification_channels?: Json
+          enabled?: boolean
+          last_triggered_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_rules_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      batch_jobs: {
+        Row: {
+          id: string
+          business_id: string
+          agent_config_id: string
+          name: string
+          status: string
+          total_contacts: number
+          completed_contacts: number
+          failed_contacts: number
+          max_concurrency: number
+          created_by: string | null
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          agent_config_id: string
+          name: string
+          status?: string
+          total_contacts?: number
+          completed_contacts?: number
+          failed_contacts?: number
+          max_concurrency?: number
+          created_by?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          agent_config_id?: string
+          name?: string
+          status?: string
+          total_contacts?: number
+          completed_contacts?: number
+          failed_contacts?: number
+          max_concurrency?: number
+          created_by?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_jobs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_jobs_agent_config_id_fkey"
+            columns: ["agent_config_id"]
+            isOneToOne: false
+            referencedRelation: "agent_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      batch_job_contacts: {
+        Row: {
+          id: string
+          batch_job_id: string
+          business_id: string
+          phone_number: string
+          name: string | null
+          status: string
+          call_id: string | null
+          attempted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          batch_job_id: string
+          business_id: string
+          phone_number: string
+          name?: string | null
+          status?: string
+          call_id?: string | null
+          attempted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          batch_job_id?: string
+          business_id?: string
+          phone_number?: string
+          name?: string | null
+          status?: string
+          call_id?: string | null
+          attempted_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_job_contacts_batch_job_id_fkey"
+            columns: ["batch_job_id"]
+            isOneToOne: false
+            referencedRelation: "batch_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_job_contacts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_records: {
+        Row: {
+          id: string
+          business_id: string
+          period_start: string
+          period_end: string
+          total_calls: number
+          total_minutes: number
+          total_cost: number
+          inbound_calls: number
+          outbound_calls: number
+          escalated_calls: number
+          currency: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          period_start: string
+          period_end: string
+          total_calls?: number
+          total_minutes?: number
+          total_cost?: number
+          inbound_calls?: number
+          outbound_calls?: number
+          escalated_calls?: number
+          currency?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          period_start?: string
+          period_end?: string
+          total_calls?: number
+          total_minutes?: number
+          total_cost?: number
+          inbound_calls?: number
+          outbound_calls?: number
+          escalated_calls?: number
+          currency?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_records_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_config_versions: {
+        Row: {
+          id: string
+          agent_config_id: string
+          business_id: string
+          version: number
+          config_snapshot: Json
+          published_at: string
+          published_by: string | null
+        }
+        Insert: {
+          id?: string
+          agent_config_id: string
+          business_id: string
+          version: number
+          config_snapshot: Json
+          published_at?: string
+          published_by?: string | null
+        }
+        Update: {
+          id?: string
+          agent_config_id?: string
+          business_id?: string
+          version?: number
+          config_snapshot?: Json
+          published_at?: string
+          published_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_config_versions_agent_config_id_fkey"
+            columns: ["agent_config_id"]
+            isOneToOne: false
+            referencedRelation: "agent_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_config_versions_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"

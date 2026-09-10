@@ -132,7 +132,47 @@ function VoiceAgentDashboard() {
       }
     },
     onSuccess: () => {
-      toast.success("Published. New calls use these settings.");
+      toast.success("Agent saved.");
+      void queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const publish = useMutation({
+    mutationFn: async () => {
+      if (!businessId || !selected?.id) throw new Error("No agent selected.");
+      // Save the current draft first
+      const payload = { ...draft, business_id: businessId } as never;
+      const { error: saveErr } = await supabase.from("agent_configs").update(payload).eq("id", selected.id);
+      if (saveErr) throw saveErr;
+
+      // Calculate new version
+      const currentVersion = (selected as any).version ?? 1;
+      const newVersion = currentVersion + 1;
+
+      // Create version snapshot
+      const { error: versionErr } = await supabase.from("agent_config_versions").insert({
+        agent_config_id: selected.id,
+        business_id: businessId,
+        version: newVersion,
+        config_snapshot: draft as any,
+        published_by: ctx?.userId ?? null,
+      });
+      if (versionErr) throw versionErr;
+
+      // Update agent config version and publish state
+      const { error: updateErr } = await supabase
+        .from("agent_configs")
+        .update({
+          version: newVersion,
+          is_draft: false,
+          published_at: new Date().toISOString(),
+        } as never)
+        .eq("id", selected.id);
+      if (updateErr) throw updateErr;
+    },
+    onSuccess: () => {
+      toast.success("Published! New calls will use this version.");
       void queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -212,14 +252,31 @@ function VoiceAgentDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {selected && (
+            <span className="text-[0.78rem] text-muted-foreground">
+              v{(selected as any).version ?? 1}
+              {(selected as any).is_draft ? " · draft" : ""}
+              {(selected as any).published_at
+                ? ` · published ${new Date((selected as any).published_at).toLocaleDateString()}`
+                : ""}
+            </span>
+          )}
           <Pill tone={bool("enabled") ? "good" : "warn"}>{bool("enabled") ? "Answering calls" : "Paused"}</Pill>
           <button
             type="button"
             onClick={() => save.mutate()}
             disabled={save.isPending}
+            className="rounded-[8px] border border-line px-4 py-2 text-[0.85rem] font-medium text-ink hover:bg-secondary disabled:opacity-60"
+          >
+            {save.isPending ? "Saving…" : "Save draft"}
+          </button>
+          <button
+            type="button"
+            onClick={() => publish.mutate()}
+            disabled={publish.isPending}
             className="rounded-full bg-primary px-5 py-2.5 text-[0.85rem] font-medium text-primary-foreground disabled:opacity-60"
           >
-            {save.isPending ? "Publishing…" : "Publish agent"}
+            {publish.isPending ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>

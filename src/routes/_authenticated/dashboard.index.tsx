@@ -10,37 +10,44 @@ export const Route = createFileRoute("/_authenticated/dashboard/")({
   component: DashboardHome,
 });
 
+async function fetchDashboardStats() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`/api/stats/dashboard`, {
+    headers: { Authorization: `Bearer ${session?.access_token}` }
+  });
+  if (!res.ok) throw new Error("Failed to fetch dashboard stats");
+  return res.json();
+}
+
 function DashboardHome() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
 
+  /* ---- Server-side stats (workspace-scoped, auth-enforced) ---- */
   const stats = useQuery({
-    queryKey: ["home-stats", businessId],
+    queryKey: ["dashboard-stats"],
+    staleTime: 2 * 60_000,
+    queryFn: () => fetchDashboardStats(),
+  });
+
+  /* ---- Recent calls (client-side — needs full rows for display) ---- */
+  const recentCalls = useQuery({
+    queryKey: ["recent-calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 2 * 60_000,
     queryFn: async () => {
-      const [agents, calls, numbers] = await Promise.all([
-        supabase.from("agent_configs").select("id, enabled", { count: "exact" }).eq("business_id", businessId!),
-        supabase
-          .from("calls")
-          .select("id, started_at, duration_seconds, caller_number, status, customers(name)", { count: "exact" })
-          .eq("business_id", businessId!)
-          .order("started_at", { ascending: false })
-          .limit(5),
-        supabase.from("phone_numbers").select("id", { count: "exact" }).eq("business_id", businessId!),
-      ]);
-      const agentList = agents.data ?? [];
-      return {
-        totalAgents: agents.count ?? 0,
-        activeAgents: agentList.filter((a) => a.enabled).length,
-        totalCalls: calls.count ?? 0,
-        recentCalls: calls.data ?? [],
-        phoneNumbers: numbers.count ?? 0,
-      };
+      const { data } = await supabase
+        .from("calls")
+        .select("id, started_at, duration_seconds, caller_number, status, customers(name)")
+        .eq("business_id", businessId!)
+        .order("started_at", { ascending: false })
+        .limit(5);
+      return data ?? [];
     },
   });
 
   const d = stats.data;
+  const calls = recentCalls.data ?? [];
 
   const QUICK_ACTIONS = [
     { to: "/dashboard/agents", label: "Create Agent", icon: Bot },
@@ -61,10 +68,10 @@ function DashboardHome() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active Agents" value={d ? String(d.activeAgents) : "—"} hint={d ? `${d.totalAgents} total` : ""} />
-        <StatCard label="Total Calls" value={d ? String(d.totalCalls) : "—"} />
-        <StatCard label="Phone Numbers" value={d ? String(d.phoneNumbers) : "—"} />
-        <StatCard label="Remaining Balance" value="∞" hint="Free tier" />
+        <StatCard label="Calls Today" value={d ? String(d.callsToday) : "—"} />
+        <StatCard label="Active Calls" value={d ? String(d.activeCalls) : "—"} hint="In progress now" />
+        <StatCard label="Active Agents" value={d ? String(d.activeAgents) : "—"} hint="Enabled configs" />
+        <StatCard label="Open Escalations" value={d ? String(d.openEscalations) : "—"} />
       </div>
 
       {/* Quick actions */}
@@ -88,13 +95,13 @@ function DashboardHome() {
       <div className="mt-8">
         <h2 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Recent Calls</h2>
         <Panel className="mt-4">
-          {!d || d.recentCalls.length === 0 ? (
+          {calls.length === 0 ? (
             <p className="px-5 py-10 text-center text-[0.9rem] text-muted-foreground">
               No calls yet. Deploy an agent to start receiving calls.
             </p>
           ) : (
             <ul className="divide-y divide-line/70">
-              {d.recentCalls.map((call: any) => (
+              {calls.map((call: any) => (
                 <li key={call.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                   <div className="min-w-0">
                     <p className="text-[0.92rem] text-ink">

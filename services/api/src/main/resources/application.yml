@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+supabase:
+  jwt:
+    secret: ${SUPABASE_JWT_SECRET:dummy_secret_for_local_development_replace_this_in_production}
+
+livekit:
+  url: ${LIVEKIT_URL:ws://localhost:7880}
+  api-key: ${LIVEKIT_API_KEY:devkey}
+  api-secret: ${LIVEKIT_API_SECRET:secret}
+
+
+server:
+  port: 8080

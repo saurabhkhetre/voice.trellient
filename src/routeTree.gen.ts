@@ -21,7 +21,6 @@ import { Route as AuthenticatedDashboardAnalyticsRouteImport } from './routes/_a
 import { Route as AuthenticatedDashboardBatchCallRouteImport } from './routes/_authenticated/dashboard.batch-call'
 import { Route as AuthenticatedDashboardBillingRouteImport } from './routes/_authenticated/dashboard.billing'
 import { Route as AuthenticatedDashboardCallHistoryRouteImport } from './routes/_authenticated/dashboard.call-history'
-import { Route as AuthenticatedDashboardChatHistoryRouteImport } from './routes/_authenticated/dashboard.chat-history'
 import { Route as AuthenticatedDashboardContactsRouteImport } from './routes/_authenticated/dashboard.contacts'
 import { Route as AuthenticatedDashboardIntegrationsRouteImport } from './routes/_authenticated/dashboard.integrations'
 import { Route as AuthenticatedDashboardKnowledgeRouteImport } from './routes/_authenticated/dashboard.knowledge'
@@ -97,12 +96,6 @@ const AuthenticatedDashboardCallHistoryRoute =
     path: '/call-history',
     getParentRoute: () => AuthenticatedDashboardRoute,
   } as any)
-const AuthenticatedDashboardChatHistoryRoute =
-  AuthenticatedDashboardChatHistoryRouteImport.update({
-    id: '/chat-history',
-    path: '/chat-history',
-    getParentRoute: () => AuthenticatedDashboardRoute,
-  } as any)
 const AuthenticatedDashboardContactsRoute =
   AuthenticatedDashboardContactsRouteImport.update({
     id: '/contacts',
@@ -157,7 +150,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/batch-call': typeof AuthenticatedDashboardBatchCallRoute
   '/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/dashboard/call-history': typeof AuthenticatedDashboardCallHistoryRoute
-  '/dashboard/chat-history': typeof AuthenticatedDashboardChatHistoryRoute
   '/dashboard/contacts': typeof AuthenticatedDashboardContactsRoute
   '/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
   '/dashboard/knowledge': typeof AuthenticatedDashboardKnowledgeRoute
@@ -177,7 +169,6 @@ export interface FileRoutesByTo {
   '/dashboard/batch-call': typeof AuthenticatedDashboardBatchCallRoute
   '/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/dashboard/call-history': typeof AuthenticatedDashboardCallHistoryRoute
-  '/dashboard/chat-history': typeof AuthenticatedDashboardChatHistoryRoute
   '/dashboard/contacts': typeof AuthenticatedDashboardContactsRoute
   '/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
   '/dashboard/knowledge': typeof AuthenticatedDashboardKnowledgeRoute
@@ -200,7 +191,6 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/batch-call': typeof AuthenticatedDashboardBatchCallRoute
   '/_authenticated/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/_authenticated/dashboard/call-history': typeof AuthenticatedDashboardCallHistoryRoute
-  '/_authenticated/dashboard/chat-history': typeof AuthenticatedDashboardChatHistoryRoute
   '/_authenticated/dashboard/contacts': typeof AuthenticatedDashboardContactsRoute
   '/_authenticated/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
   '/_authenticated/dashboard/knowledge': typeof AuthenticatedDashboardKnowledgeRoute
@@ -223,7 +213,6 @@ export interface FileRouteTypes {
     | '/dashboard/batch-call'
     | '/dashboard/billing'
     | '/dashboard/call-history'
-    | '/dashboard/chat-history'
     | '/dashboard/contacts'
     | '/dashboard/integrations'
     | '/dashboard/knowledge'
@@ -243,7 +232,6 @@ export interface FileRouteTypes {
     | '/dashboard/batch-call'
     | '/dashboard/billing'
     | '/dashboard/call-history'
-    | '/dashboard/chat-history'
     | '/dashboard/contacts'
     | '/dashboard/integrations'
     | '/dashboard/knowledge'
@@ -265,7 +253,6 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/batch-call'
     | '/_authenticated/dashboard/billing'
     | '/_authenticated/dashboard/call-history'
-    | '/_authenticated/dashboard/chat-history'
     | '/_authenticated/dashboard/contacts'
     | '/_authenticated/dashboard/integrations'
     | '/_authenticated/dashboard/knowledge'
@@ -369,13 +356,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardCallHistoryRouteImport
       parentRoute: typeof AuthenticatedDashboardRoute
     }
-    '/_authenticated/dashboard/chat-history': {
-      id: '/_authenticated/dashboard/chat-history'
-      path: '/chat-history'
-      fullPath: '/dashboard/chat-history'
-      preLoaderRoute: typeof AuthenticatedDashboardChatHistoryRouteImport
-      parentRoute: typeof AuthenticatedDashboardRoute
-    }
     '/_authenticated/dashboard/contacts': {
       id: '/_authenticated/dashboard/contacts'
       path: '/contacts'
@@ -436,7 +416,6 @@ interface AuthenticatedDashboardRouteChildren {
   AuthenticatedDashboardBatchCallRoute: typeof AuthenticatedDashboardBatchCallRoute
   AuthenticatedDashboardBillingRoute: typeof AuthenticatedDashboardBillingRoute
   AuthenticatedDashboardCallHistoryRoute: typeof AuthenticatedDashboardCallHistoryRoute
-  AuthenticatedDashboardChatHistoryRoute: typeof AuthenticatedDashboardChatHistoryRoute
   AuthenticatedDashboardContactsRoute: typeof AuthenticatedDashboardContactsRoute
   AuthenticatedDashboardIntegrationsRoute: typeof AuthenticatedDashboardIntegrationsRoute
   AuthenticatedDashboardKnowledgeRoute: typeof AuthenticatedDashboardKnowledgeRoute
@@ -456,8 +435,6 @@ const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
     AuthenticatedDashboardBillingRoute: AuthenticatedDashboardBillingRoute,
     AuthenticatedDashboardCallHistoryRoute:
       AuthenticatedDashboardCallHistoryRoute,
-    AuthenticatedDashboardChatHistoryRoute:
-      AuthenticatedDashboardChatHistoryRoute,
     AuthenticatedDashboardContactsRoute: AuthenticatedDashboardContactsRoute,
     AuthenticatedDashboardIntegrationsRoute:
       AuthenticatedDashboardIntegrationsRoute,

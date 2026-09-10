@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { CreditCard, Check } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CreditCard, Check, ExternalLink } from "lucide-react";
 
-import { PageHeader, Panel, StatCard, Pill } from "@/components/dashboard/Shell";
+import { PageHeader, Panel, StatCard, Pill, EmptyState } from "@/components/dashboard/Shell";
+import { supabase } from "@/integrations/supabase/client";
+import { useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/billing")({
   component: BillingPage,
@@ -14,6 +16,7 @@ const PLANS = [
     name: "Free",
     price: "₹0",
     period: "/month",
+    minuteLimit: 100,
     features: ["100 minutes/month", "1 agent", "1 phone number", "Basic analytics", "Email support"],
   },
   {
@@ -21,6 +24,7 @@ const PLANS = [
     name: "Pro",
     price: "₹4,999",
     period: "/month",
+    minuteLimit: 2000,
     features: ["2,000 minutes/month", "5 agents", "5 phone numbers", "Advanced analytics", "Live monitoring", "Priority support"],
     popular: true,
   },
@@ -29,41 +33,97 @@ const PLANS = [
     name: "Enterprise",
     price: "Custom",
     period: "",
+    minuteLimit: Infinity,
     features: ["Unlimited minutes", "Unlimited agents", "Unlimited numbers", "Custom integrations", "Dedicated account manager", "SLA guarantee", "On-premise option"],
   },
 ];
 
-const USAGE_HISTORY = [
-  { date: "Aug 2026", minutes: 1847, cost: "₹4,999", status: "paid" },
-  { date: "Jul 2026", minutes: 1523, cost: "₹4,999", status: "paid" },
-  { date: "Jun 2026", minutes: 892, cost: "₹4,999", status: "paid" },
-  { date: "May 2026", minutes: 345, cost: "₹0", status: "free tier" },
-];
-
 function BillingPage() {
-  const [currentPlan, setCurrentPlan] = useState("free");
+  const { data: ctx } = useBusiness();
+  const businessId = ctx?.business.id;
+
+  /* ---- Current usage: total minutes from calls this month ---- */
+  const currentUsage = useQuery({
+    queryKey: ["billing-usage-current", businessId],
+    enabled: Boolean(businessId),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      const { data, error } = await supabase
+        .from("calls")
+        .select("duration_seconds")
+        .eq("business_id", businessId!)
+        .gte("started_at", monthStart);
+      if (error) throw error;
+
+      const totalSeconds = (data ?? []).reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
+      const totalMinutes = Math.round(totalSeconds / 60 * 10) / 10;
+      return { totalMinutes, callCount: data?.length ?? 0 };
+    },
+  });
+
+  /* ---- Usage history from usage_records ---- */
+  const usageHistory = useQuery({
+    queryKey: ["billing-history", businessId],
+    enabled: Boolean(businessId),
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("usage_records")
+        .select("period_start, period_end, total_calls, total_minutes, total_cost, currency")
+        .eq("business_id", businessId!)
+        .order("period_start", { ascending: false })
+        .limit(12);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const usage = currentUsage.data;
+  const history = usageHistory.data ?? [];
+
+  // Current plan is always free (no subscription table wired yet)
+  const currentPlan = PLANS[0]!;
+  const minuteLimit = currentPlan.minuteLimit;
+  const minutesUsed = usage?.totalMinutes ?? 0;
+  const usagePercent = minuteLimit > 0 ? Math.min(100, Math.round((minutesUsed / minuteLimit) * 100)) : 0;
 
   return (
     <div>
-      <PageHeader title="Billing" description="Manage your plan, track usage, and update payment methods." />
+      <PageHeader title="Billing" description="Track usage and explore plans." />
 
       {/* Usage stats */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label="Current Plan" value={PLANS.find((p) => p.id === currentPlan)?.name ?? "Free"} />
-        <StatCard label="Minutes Used" value="47" hint="of 100 this month" />
-        <StatCard label="Minutes Remaining" value="53" />
-        <StatCard label="Per-Minute Rate" value="₹2.10" hint="Blended rate" />
+        <StatCard label="Current Plan" value={currentPlan.name} />
+        <StatCard
+          label="Minutes Used"
+          value={usage ? String(usage.totalMinutes) : "—"}
+          hint={`of ${minuteLimit} this month`}
+        />
+        <StatCard
+          label="Minutes Remaining"
+          value={usage ? String(Math.max(0, minuteLimit - usage.totalMinutes)) : "—"}
+        />
+        <StatCard
+          label="Calls This Month"
+          value={usage ? String(usage.callCount) : "—"}
+        />
       </div>
 
       {/* Usage bar */}
       <Panel className="mt-6 p-5">
         <h2 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Usage this month</h2>
         <div className="mt-4 h-3 rounded-full bg-secondary">
-          <div className="h-3 rounded-full bg-ink transition-all" style={{ width: "47%" }} />
+          <div
+            className="h-3 rounded-full bg-ink transition-all"
+            style={{ width: `${usagePercent}%` }}
+          />
         </div>
         <div className="mt-2 flex justify-between text-[0.78rem] text-muted-foreground">
-          <span>47 min used</span>
-          <span>100 min limit</span>
+          <span>{minutesUsed} min used</span>
+          <span>{minuteLimit} min limit</span>
         </div>
       </Panel>
 
@@ -94,63 +154,65 @@ function BillingPage() {
                   </li>
                 ))}
               </ul>
-              <button
-                type="button"
-                onClick={() => setCurrentPlan(plan.id)}
-                className={`mt-6 w-full rounded-full px-5 py-2.5 text-[0.85rem] font-medium transition-colors ${
-                  currentPlan === plan.id
-                    ? "bg-secondary text-ink cursor-default"
-                    : "bg-primary text-primary-foreground hover:opacity-90"
-                }`}
-                disabled={currentPlan === plan.id}
-              >
-                {currentPlan === plan.id ? "Current Plan" : plan.id === "enterprise" ? "Contact Sales" : "Upgrade"}
-              </button>
+              {plan.id === "free" ? (
+                <div className="mt-6 w-full rounded-full bg-secondary px-5 py-2.5 text-center text-[0.85rem] font-medium text-ink">
+                  Current Plan
+                </div>
+              ) : (
+                <a
+                  href="mailto:sales@trellient.com?subject=Trellient Voice - Plan Upgrade Inquiry"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[0.85rem] font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+                >
+                  <ExternalLink className="size-3.5" />
+                  Contact Sales
+                </a>
+              )}
             </Panel>
           ))}
         </div>
       </div>
 
-      {/* Payment method */}
+      {/* Payment notice */}
       <Panel className="mt-8 p-6">
         <h2 className="flex items-center gap-2 text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">
           <CreditCard className="size-4" /> Payment Method
         </h2>
-        <div className="mt-4 flex items-center justify-between rounded-[10px] border border-line p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-[6px] bg-secondary text-[0.82rem] font-medium text-ink">
-              VISA
-            </div>
-            <div>
-              <p className="text-[0.92rem] text-ink">•••• •••• •••• 4242</p>
-              <p className="text-[0.78rem] text-muted-foreground">Expires 12/28</p>
-            </div>
-          </div>
-          <button className="text-[0.82rem] font-medium text-ink underline underline-offset-4 hover:text-muted-foreground">
-            Update
-          </button>
-        </div>
+        <p className="mt-4 text-[0.92rem] text-muted-foreground">
+          No payment method configured. Upgrade to a paid plan by contacting our sales team.
+        </p>
       </Panel>
 
       {/* Usage history */}
       <Panel className="mt-8">
         <div className="border-b border-line px-5 py-4">
-          <h2 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Billing History</h2>
+          <h2 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Usage History</h2>
         </div>
-        <ul className="divide-y divide-line/70">
-          {USAGE_HISTORY.map((row) => (
-            <li key={row.date} className="flex items-center justify-between px-5 py-4">
-              <div>
-                <p className="text-[0.92rem] text-ink">{row.date}</p>
-                <p className="text-[0.78rem] text-muted-foreground">{row.minutes} minutes used</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[0.92rem] font-medium text-ink">{row.cost}</span>
-                <Pill tone={row.status === "paid" ? "good" : "neutral"}>{row.status}</Pill>
-              </div>
-            </li>
-          ))}
-        </ul>
+        {history.length === 0 ? (
+          <EmptyState>No usage history yet. Usage is recorded daily.</EmptyState>
+        ) : (
+          <ul className="divide-y divide-line/70">
+            {history.map((row) => (
+              <li key={row.period_start} className="flex items-center justify-between px-5 py-4">
+                <div>
+                  <p className="text-[0.92rem] text-ink">
+                    {new Date(row.period_start).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                    {" — "}
+                    {new Date(row.period_end).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
+                  </p>
+                  <p className="text-[0.78rem] text-muted-foreground">
+                    {row.total_calls} calls · {row.total_minutes} minutes
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[0.92rem] font-medium text-ink">
+                    {row.currency === "INR" ? "₹" : "$"}{Number(row.total_cost).toFixed(2)}
+                  </span>
+                  <Pill tone="neutral">recorded</Pill>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
     </div>
   );

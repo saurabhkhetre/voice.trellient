@@ -1,117 +1,154 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { EmptyState, PageHeader, Panel, StatCard } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
-import { formatDuration, useBusiness } from "@/lib/business/useBusiness";
+import { formatDuration } from "@/lib/business/useBusiness";
+import type { AnalyticsStats } from "@/lib/analytics/stats.functions";
+import { supabase } from "@/lib/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/dashboard/analytics")({
   component: AnalyticsPage,
 });
 
+const TIME_RANGES = [
+  { value: "today", label: "Today" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "90d", label: "Last 90 days" },
+  { value: "all", label: "All time" },
+] as const;
+
+type RangeValue = (typeof TIME_RANGES)[number]["value"];
+
+async function fetchAnalyticsStats(range: string) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`/api/stats/analytics?range=${range}`, {
+    headers: { Authorization: `Bearer ${session?.access_token}` }
+  });
+  if (!res.ok) throw new Error("Failed to fetch analytics stats");
+  return res.json() as Promise<AnalyticsStats>;
+}
+
 function AnalyticsPage() {
-  const { data: ctx } = useBusiness();
-  const businessId = ctx?.business.id;
+  const [range, setRange] = useState<RangeValue>("30d");
 
   const stats = useQuery({
-    queryKey: ["analytics", businessId],
-    enabled: Boolean(businessId),
+    queryKey: ["analytics-stats", range],
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const since = new Date(Date.now() - 29 * 864e5);
-      const { data } = await supabase
-        .from("calls")
-        .select("started_at, duration_seconds, intent, language, escalation_required, latency_ms, outcome")
-        .eq("business_id", businessId!)
-        .gte("started_at", since.toISOString());
-      const rows = data ?? [];
-
-      const byDay = new Map<string, number>();
-      for (let i = 0; i < 30; i += 1) {
-        const day = new Date(Date.now() - (29 - i) * 864e5).toISOString().slice(0, 10);
-        byDay.set(day, 0);
-      }
-      const tally = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1);
-      const intents = new Map<string, number>();
-      const languages = new Map<string, number>();
-
-      for (const row of rows) {
-        const day = row.started_at.slice(0, 10);
-        if (byDay.has(day)) byDay.set(day, (byDay.get(day) ?? 0) + 1);
-        tally(intents, row.intent ?? "unclassified");
-        tally(languages, row.language ?? "unknown");
-      }
-
-      const durations = rows.map((r) => r.duration_seconds ?? 0).filter((n) => n > 0);
-      const latencies = rows.map((r) => r.latency_ms ?? 0).filter((n) => n > 0);
-
-      return {
-        total: rows.length,
-        byDay: [...byDay.entries()],
-        intents: [...intents.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6),
-        languages: [...languages.entries()].sort((a, b) => b[1] - a[1]),
-        avgDuration: durations.length
-          ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
-          : null,
-        avgLatency: latencies.length
-          ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
-          : null,
-        containment: rows.length
-          ? Math.round((rows.filter((r) => !r.escalation_required).length / rows.length) * 100)
-          : null,
-      };
-    },
+    queryFn: () => fetchAnalyticsStats(range),
   });
 
-  const d = stats.data;
-  const peak = d ? Math.max(1, ...d.byDay.map(([, count]) => count)) : 1;
+  const d = stats.data as AnalyticsStats | undefined;
 
   return (
     <div>
-      <PageHeader title="Analytics" description="Call volume, intents, languages and responsiveness over 30 days." />
+      <PageHeader
+        title="Analytics"
+        description="Call volume, intents, direction breakdown and responsiveness."
+        action={
+          <select
+            value={range}
+            onChange={(e) => setRange(e.target.value as RangeValue)}
+            className="rounded-[8px] border border-line bg-card px-3 py-2 text-[0.85rem] text-ink outline-none focus:border-ink"
+          >
+            {TIME_RANGES.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+        }
+      />
 
+      {/* Summary stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Calls (30d)" value={d ? String(d.total) : "—"} />
-        <StatCard label="Avg. handle time" value={d?.avgDuration != null ? formatDuration(d.avgDuration) : "—"} />
-        <StatCard label="Containment" value={d?.containment != null ? `${d.containment}%` : "—"} />
-        <StatCard label="Avg. response latency" value={d?.avgLatency != null ? `${d.avgLatency} ms` : "—"} />
+        <StatCard label="Total Calls" value={d ? String(d.totalCalls) : "—"} />
+        <StatCard label="Avg. Handle Time" value={d?.avgDuration ? formatDuration(d.avgDuration) : "—"} />
+        <StatCard label="Containment" value={d ? `${d.containmentRate}%` : "—"} hint="Calls resolved without escalation" />
+        <StatCard label="Escalation Rate" value={d ? `${d.escalationRate}%` : "—"} hint={d ? `${d.escalationCount} escalated` : ""} />
       </div>
 
-      <Panel className="mt-6 px-5 py-6">
-        <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">Daily call volume</h2>
-        {!d || d.total === 0 ? (
-          <EmptyState>No call data yet.</EmptyState>
-        ) : (
-          <div className="mt-6 flex h-40 items-end gap-1">
-            {d.byDay.map(([day, count]) => (
-              <div key={day} className="flex-1" title={`${day}: ${count}`}>
-                <div
-                  className="w-full rounded-t-[2px] bg-ink/80 transition-[height] duration-700"
-                  style={{ height: `${Math.round((count / peak) * 140)}px` }}
-                />
+      {/* Call breakdown */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {/* By Status */}
+        <Panel className="px-5 py-6">
+          <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">Call breakdown</h2>
+          {!d || d.totalCalls === 0 ? (
+            <EmptyState>No call data yet.</EmptyState>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              <div className="rounded-[10px] bg-secondary/50 p-4">
+                <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Answered</p>
+                <p className="mt-1 font-display text-[1.4rem] tracking-tight text-ink">{d.answeredCalls}</p>
               </div>
-            ))}
-          </div>
-        )}
-      </Panel>
+              <div className="rounded-[10px] bg-secondary/50 p-4">
+                <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Missed</p>
+                <p className="mt-1 font-display text-[1.4rem] tracking-tight text-ink">{d.missedCalls}</p>
+              </div>
+              <div className="rounded-[10px] bg-secondary/50 p-4">
+                <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Failed</p>
+                <p className="mt-1 font-display text-[1.4rem] tracking-tight text-ink">{d.failedCalls}</p>
+              </div>
+              <div className="rounded-[10px] bg-secondary/50 p-4">
+                <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Total Minutes</p>
+                <p className="mt-1 font-display text-[1.4rem] tracking-tight text-ink">{d.totalMinutes}</p>
+              </div>
+            </div>
+          )}
+        </Panel>
 
+        {/* By Direction */}
+        <Panel className="px-5 py-6">
+          <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">Direction</h2>
+          {!d || d.totalCalls === 0 ? (
+            <EmptyState>No call data yet.</EmptyState>
+          ) : (
+            <>
+              <div className="mt-5 flex items-end gap-8">
+                <div>
+                  <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Inbound</p>
+                  <p className="mt-1 font-display text-[2rem] tracking-tight text-ink">{d.callsByDirection.inbound}</p>
+                </div>
+                <div>
+                  <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Outbound</p>
+                  <p className="mt-1 font-display text-[2rem] tracking-tight text-ink">{d.callsByDirection.outbound}</p>
+                </div>
+              </div>
+              {/* Direction bar */}
+              <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-secondary">
+                {d.callsByDirection.inbound > 0 && (
+                  <div
+                    className="h-full bg-ink/80 transition-all"
+                    style={{ width: `${Math.round((d.callsByDirection.inbound / d.totalCalls) * 100)}%` }}
+                  />
+                )}
+              </div>
+              <div className="mt-1.5 flex justify-between text-[0.72rem] text-muted-foreground">
+                <span>Inbound {d.totalCalls > 0 ? Math.round((d.callsByDirection.inbound / d.totalCalls) * 100) : 0}%</span>
+                <span>Outbound {d.totalCalls > 0 ? Math.round((d.callsByDirection.outbound / d.totalCalls) * 100) : 0}%</span>
+              </div>
+            </>
+          )}
+        </Panel>
+      </div>
+
+      {/* Top intents */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Panel className="px-5 py-6">
           <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">Top intents</h2>
-          {!d || d.intents.length === 0 ? (
+          {!d || d.topIntents.length === 0 ? (
             <EmptyState>No intents recorded.</EmptyState>
           ) : (
             <ul className="mt-5 space-y-3">
-              {d.intents.map(([intent, count]) => (
-                <li key={intent}>
+              {d.topIntents.map((item) => (
+                <li key={item.intent}>
                   <div className="flex items-center justify-between text-[0.88rem]">
-                    <span className="text-ink">{intent.replace(/_/g, " ")}</span>
-                    <span className="text-muted-foreground">{count}</span>
+                    <span className="text-ink">{item.intent.replace(/_/g, " ")}</span>
+                    <span className="text-muted-foreground">{item.count}</span>
                   </div>
                   <div className="mt-1.5 h-1 rounded-full bg-secondary">
                     <div
                       className="h-1 rounded-full bg-ink/80"
-                      style={{ width: `${Math.round((count / (d.intents[0]?.[1] ?? 1)) * 100)}%` }}
+                      style={{ width: `${Math.round((item.count / (d.topIntents[0]?.count ?? 1)) * 100)}%` }}
                     />
                   </div>
                 </li>
@@ -120,18 +157,21 @@ function AnalyticsPage() {
           )}
         </Panel>
 
+        {/* Status breakdown */}
         <Panel className="px-5 py-6">
-          <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">Languages</h2>
-          {!d || d.languages.length === 0 ? (
-            <EmptyState>No language data.</EmptyState>
+          <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">By status</h2>
+          {!d || Object.keys(d.callsByStatus).length === 0 ? (
+            <EmptyState>No status data.</EmptyState>
           ) : (
             <ul className="mt-5 space-y-3">
-              {d.languages.map(([lang, count]) => (
-                <li key={lang} className="flex items-center justify-between text-[0.88rem]">
-                  <span className="text-ink">{lang.toUpperCase()}</span>
-                  <span className="text-muted-foreground">{count} calls</span>
-                </li>
-              ))}
+              {Object.entries(d.callsByStatus)
+                .sort(([, a], [, b]) => b - a)
+                .map(([status, count]) => (
+                  <li key={status} className="flex items-center justify-between text-[0.88rem]">
+                    <span className="text-ink capitalize">{status.replace(/_/g, " ")}</span>
+                    <span className="text-muted-foreground">{count} calls</span>
+                  </li>
+                ))}
             </ul>
           )}
         </Panel>

@@ -19,8 +19,13 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    // "localhost" can resolve to IPv6 only on some machines; pin IPv4 so the
+    // dev URL answers the same way everywhere. Browsers fall back to it.
+    host: "127.0.0.1",
     proxy: {
-      "/api": {
+      // Only the Spring Boot API's own paths. Everything else under /api —
+      // notably /api/public/telephony/* — is served by this app.
+      "^/api/(stats|business|voice)(/|$)": {
         target: "http://localhost:8080",
         changeOrigin: true,
       },

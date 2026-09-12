@@ -1,17 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Plus, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-
-type ToolRow = {
-  id: string;
-  name: string;
-  description: string;
-  tool_type: string;
-  enabled: boolean;
-};
+import {
+  addAgentTool,
+  deleteAgentTool,
+  listAgentTools,
+  updateAgentTool,
+  type AgentTool,
+  type AgentToolPatch,
+} from "@/lib/voice/agent-tools.functions";
 
 const PRESETS: { type: string; name: string; description: string }[] = [
   { type: "end_call", name: "End call", description: "Hang up politely once the caller's request is resolved." },
@@ -27,56 +27,46 @@ const PRESETS: { type: string; name: string; description: string }[] = [
 ];
 
 /** Retell-style per-agent tools/functions builder, persisted to agent_tools. */
-export function FunctionsSection({ agentId, businessId }: { agentId: string; businessId: string }) {
+export function FunctionsSection({ agentId }: { agentId: string; businessId: string }) {
   const queryClient = useQueryClient();
   const queryKey = ["agent-tools", agentId];
+  const fetchTools = useServerFn(listAgentTools);
+  const addTool = useServerFn(addAgentTool);
+  const updateTool = useServerFn(updateAgentTool);
+  const removeTool = useServerFn(deleteAgentTool);
 
   const tools = useQuery({
     queryKey,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agent_tools")
-        .select("id, name, description, tool_type, enabled")
-        .eq("agent_config_id", agentId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as ToolRow[];
-    },
+    queryFn: () => fetchTools({ data: { agentConfigId: agentId } }),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey });
 
   const add = useMutation({
-    mutationFn: async (preset: (typeof PRESETS)[number]) => {
-      const { error } = await supabase.from("agent_tools").insert({
-        business_id: businessId,
-        agent_config_id: agentId,
-        name: preset.name,
-        description: preset.description,
-        tool_type: preset.type,
-        sort_order: tools.data?.length ?? 0,
-      });
-      if (error) throw error;
-    },
+    mutationFn: (preset: (typeof PRESETS)[number]) =>
+      addTool({
+        data: { agentConfigId: agentId, name: preset.name, description: preset.description, toolType: preset.type },
+      }),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Partial<ToolRow> }) => {
-      const { error } = await supabase.from("agent_tools").update(patch).eq("id", id);
-      if (error) throw error;
+    mutationFn: ({ id, patch }: { id: string; patch: AgentToolPatch }) => updateTool({ data: { toolId: id, patch } }),
+    // Apply edits locally right away, so typing in a field doesn't wait on the server.
+    onMutate: ({ id, patch }) => {
+      queryClient.setQueryData<AgentTool[]>(queryKey, (old) =>
+        old?.map((tool) => (tool.id === id ? { ...tool, ...patch } : tool)),
+      );
     },
-    onSuccess: invalidate,
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      invalidate();
+    },
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_tools").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => removeTool({ data: { toolId: id } }),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
@@ -112,7 +102,7 @@ export function FunctionsSection({ agentId, businessId }: { agentId: string; bus
                     onChange={(e) => update.mutate({ id: tool.id, patch: { description: e.target.value } })}
                     className="input-base resize-y text-[0.85rem]"
                   />
-                  <p className="font-mono text-[0.7rem] text-muted-foreground">{tool.tool_type}</p>
+                  <p className="font-mono text-[0.7rem] text-muted-foreground">{tool.toolType}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <button

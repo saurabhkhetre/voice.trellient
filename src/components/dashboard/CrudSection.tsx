@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
 import { EmptyState, Panel } from "@/components/dashboard/Shell";
+import { deleteRecord, listRecords, saveRecord, type RecordTable } from "@/lib/data/records.functions";
 import { cn } from "@/lib/utils";
 
 export type FieldType = "text" | "textarea" | "number" | "boolean" | "select";
@@ -30,27 +31,25 @@ export interface CrudColumn {
 }
 
 interface CrudSectionProps {
-  table: string;
+  table: RecordTable;
   businessId: string;
   fields: CrudField[];
   columns: CrudColumn[];
-  orderBy?: { column: string; ascending?: boolean };
   searchColumns?: string[];
   createLabel?: string;
   emptyMessage?: string;
 }
 
 /**
- * Business-scoped CRUD surface. Every read and write is filtered by the
- * business resolved from the session, and row-level security enforces the same
- * boundary server-side.
+ * Business-scoped CRUD surface, newest record first. Every read and write goes
+ * through a server function that checks workspace membership and only accepts
+ * the table's known columns.
  */
 export function CrudSection({
   table,
   businessId,
   fields,
   columns,
-  orderBy = { column: "created_at", ascending: false },
   searchColumns = [],
   createLabel = "Add",
   emptyMessage = "Nothing here yet.",
@@ -60,34 +59,20 @@ export function CrudSection({
   const [editing, setEditing] = useState<Row | null>(null);
   const [creating, setCreating] = useState(false);
   const queryKey = useMemo(() => [table, businessId], [table, businessId]);
+  const fetchRows = useServerFn(listRecords);
+  const saveRow = useServerFn(saveRecord);
+  const removeRow = useServerFn(deleteRecord);
 
   const list = useQuery({
     queryKey,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from(table as never)
-        .select("*")
-        .eq("business_id", businessId)
-        .order(orderBy.column, { ascending: orderBy.ascending ?? false });
-      if (error) throw error;
-      return (data ?? []) as Row[];
-    },
+    queryFn: (): Promise<Row[]> => fetchRows({ data: { table, businessId } }),
   });
 
   const save = useMutation({
-    mutationFn: async (values: Row) => {
-      const payload = { ...values, business_id: businessId };
-      if (editing?.["id"]) {
-        const { error } = await supabase
-          .from(table as never)
-          .update(payload as never)
-          .eq("id", editing["id"] as string);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from(table as never).insert(payload as never);
-        if (error) throw error;
-      }
-    },
+    mutationFn: (values: Row) =>
+      saveRow({
+        data: { table, businessId, id: editing?.["id"] ? String(editing["id"]) : undefined, values },
+      }),
     onSuccess: () => {
       toast.success("Saved.");
       setEditing(null);
@@ -98,10 +83,7 @@ export function CrudSection({
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from(table as never).delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => removeRow({ data: { table, businessId, id } }),
     onSuccess: () => {
       toast.success("Deleted.");
       void queryClient.invalidateQueries({ queryKey });

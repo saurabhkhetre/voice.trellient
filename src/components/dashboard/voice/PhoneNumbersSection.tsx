@@ -1,18 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Phone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { supabase } from "@/integrations/supabase/client";
-
-type NumberRow = {
-  id: string;
-  phone_number: string;
-  label: string | null;
-  provider: string;
-  agent_config_id: string | null;
-  active: boolean;
-};
+import {
+  addPhoneNumber,
+  deletePhoneNumber,
+  listPhoneNumbers,
+  updatePhoneNumber,
+} from "@/lib/telephony/phone-numbers.functions";
 
 /** Assign inbound numbers to agents. */
 export function PhoneNumbersSection({
@@ -28,34 +25,21 @@ export function PhoneNumbersSection({
   const queryKey = ["phone-numbers", businessId];
   const [number, setNumber] = useState("");
   const [label, setLabel] = useState("");
+  const fetchNumbers = useServerFn(listPhoneNumbers);
+  const addNumber = useServerFn(addPhoneNumber);
+  const updateNumber = useServerFn(updatePhoneNumber);
+  const removeNumber = useServerFn(deletePhoneNumber);
 
   const numbers = useQuery({
     queryKey,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("phone_numbers")
-        .select("id, phone_number, label, provider, agent_config_id, active")
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as NumberRow[];
-    },
+    queryFn: () => fetchNumbers({ data: { businessId } }),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey });
 
   const add = useMutation({
-    mutationFn: async () => {
-      const trimmed = number.trim();
-      if (!/^\+?[0-9\s-]{6,20}$/.test(trimmed)) throw new Error("Enter a valid phone number.");
-      const { error } = await supabase.from("phone_numbers").insert({
-        business_id: businessId,
-        agent_config_id: agentId,
-        phone_number: trimmed,
-        label: label.trim() || null,
-      });
-      if (error) throw error;
-    },
+    mutationFn: () =>
+      addNumber({ data: { businessId, agentConfigId: agentId, phoneNumber: number, label: label.trim() || null } }),
     onSuccess: () => {
       setNumber("");
       setLabel("");
@@ -66,19 +50,14 @@ export function PhoneNumbersSection({
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Partial<NumberRow> }) => {
-      const { error } = await supabase.from("phone_numbers").update(patch).eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: ({ id, patch }: { id: string; patch: { agentConfigId?: string | null; active?: boolean } }) =>
+      updateNumber({ data: { phoneNumberId: id, ...patch } }),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("phone_numbers").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => removeNumber({ data: { phoneNumberId: id } }),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
@@ -120,14 +99,14 @@ export function PhoneNumbersSection({
             <div key={row.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <Phone className="size-4 shrink-0 text-brass" />
               <span className="min-w-0 flex-1">
-                <span className="block font-mono text-[0.88rem] text-ink">{row.phone_number}</span>
+                <span className="block font-mono text-[0.88rem] text-ink">{row.phoneNumber}</span>
                 <span className="text-[0.75rem] text-muted-foreground">
                   {row.label ?? "Unlabelled"} · {row.provider}
                 </span>
               </span>
               <select
-                value={row.agent_config_id ?? ""}
-                onChange={(e) => update.mutate({ id: row.id, patch: { agent_config_id: e.target.value || null } })}
+                value={row.agentConfigId ?? ""}
+                onChange={(e) => update.mutate({ id: row.id, patch: { agentConfigId: e.target.value || null } })}
                 className="input-base w-auto py-1.5 text-[0.8rem]"
               >
                 <option value="">Unassigned</option>

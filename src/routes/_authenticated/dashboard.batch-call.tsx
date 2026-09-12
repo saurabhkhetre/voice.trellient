@@ -1,35 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Play, Pause, PhoneOutgoing, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyState, PageHeader, Panel, Pill, StatCard } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
-import { useBusiness } from "@/lib/business/useBusiness";
-import { formatDateTime } from "@/lib/business/useBusiness";
+import { formatDateTime, useBusiness } from "@/lib/business/useBusiness";
+import { listAgentConfigs } from "@/lib/voice/agent-configs.functions";
+import { createBatchJob, listBatchJobs, setBatchJobStatus } from "@/lib/voice/batch.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/batch-call")({
   component: BatchCallPage,
 });
 
-type BatchJob = {
-  id: string;
-  name: string;
-  status: string;
-  total_contacts: number;
-  completed_contacts: number;
-  failed_contacts: number;
-  agent_config_id: string;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-};
-
 function BatchCallPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
   const qc = useQueryClient();
+  const fetchAgents = useServerFn(listAgentConfigs);
+  const fetchJobs = useServerFn(listBatchJobs);
+  const createJob = useServerFn(createBatchJob);
+  const setJobStatus = useServerFn(setBatchJobStatus);
 
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
@@ -38,71 +30,31 @@ function BatchCallPage() {
 
   /* ---- Load agent configs for the selector ---- */
   const agents = useQuery({
-    queryKey: ["batch-agents", businessId],
+    queryKey: ["agent-configs", businessId],
     enabled: Boolean(businessId),
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("agent_configs")
-        .select("id, name")
-        .eq("business_id", businessId!)
-        .eq("enabled", true)
-        .order("name");
-      return data ?? [];
-    },
+    queryFn: () => fetchAgents({ data: { businessId: businessId! } }),
   });
+  const enabledAgents = (agents.data ?? []).filter((agent) => agent.enabled);
 
   /* ---- Load batch jobs ---- */
   const jobsQuery = useQuery({
     queryKey: ["batch-jobs", businessId],
     enabled: Boolean(businessId),
     staleTime: 10_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("batch_jobs")
-        .select("id, name, status, total_contacts, completed_contacts, failed_contacts, agent_config_id, created_at, started_at, completed_at")
-        .eq("business_id", businessId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as BatchJob[];
-    },
+    queryFn: () => fetchJobs({ data: { businessId: businessId! } }),
   });
 
   const jobs = jobsQuery.data ?? [];
-  const totalContacts = jobs.reduce((a, c) => a + c.completed_contacts, 0);
-  const totalReached = jobs.reduce((a, c) => a + c.completed_contacts + c.failed_contacts, 0);
+  const totalContacts = jobs.reduce((a, c) => a + c.completedContacts, 0);
+  const totalReached = jobs.reduce((a, c) => a + c.completedContacts + c.failedContacts, 0);
 
   /* ---- Create campaign mutation ---- */
   const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!businessId || !name.trim() || !agentConfigId) throw new Error("Missing required fields.");
-      const lines = csvText.trim().split("\n").filter(Boolean).map((l) => l.trim());
-      if (lines.length === 0) throw new Error("Please add at least one phone number.");
-
-      // Create job
-      const { data: job, error: jobErr } = await supabase
-        .from("batch_jobs")
-        .insert({
-          business_id: businessId,
-          agent_config_id: agentConfigId,
-          name: name.trim(),
-          total_contacts: lines.length,
-        })
-        .select("id")
-        .single();
-      if (jobErr || !job) throw new Error(jobErr?.message ?? "Failed to create campaign.");
-
-      // Insert contacts
-      const contacts = lines.map((phone) => ({
-        batch_job_id: job.id,
-        business_id: businessId,
-        phone_number: phone,
-      }));
-      const { error: contactErr } = await supabase
-        .from("batch_job_contacts")
-        .insert(contacts);
-      if (contactErr) throw new Error(contactErr.message);
-
-      return job.id;
+    mutationFn: () => {
+      if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
+      return createJob({
+        data: { businessId, agentConfigId, name, phoneNumbers: csvText.split("\n") },
+      });
     },
     onSuccess: () => {
       toast.success("Campaign created. Configure your agent and launch when ready.");
@@ -119,23 +71,8 @@ function BatchCallPage() {
 
   /* ---- Toggle status mutation ---- */
   const toggleMutation = useMutation({
-    mutationFn: async ({ id, currentStatus }: { id: string; currentStatus: string }) => {
-      let newStatus: string;
-      if (currentStatus === "running") newStatus = "paused";
-      else if (currentStatus === "paused" || currentStatus === "draft" || currentStatus === "queued") newStatus = "running";
-      else return;
-
-      const updateData: any = { status: newStatus };
-      if (newStatus === "running" && (currentStatus === "draft" || currentStatus === "queued")) {
-        updateData["started_at"] = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from("batch_jobs")
-        .update(updateData)
-        .eq("id", id);
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: ({ id, currentStatus }: { id: string; currentStatus: string }) =>
+      setJobStatus({ data: { jobId: id, action: currentStatus === "running" ? "pause" : "start" } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["batch-jobs"] });
     },
@@ -199,7 +136,7 @@ function BatchCallPage() {
                 className="input-base mt-2"
               >
                 <option value="">Select an agent…</option>
-                {(agents.data ?? []).map((a) => (
+                {enabledAgents.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
@@ -244,8 +181,8 @@ function BatchCallPage() {
         ) : (
           <ul className="divide-y divide-line/70">
             {jobs.map((job) => {
-              const progress = job.total_contacts > 0
-                ? Math.round(((job.completed_contacts + job.failed_contacts) / job.total_contacts) * 100)
+              const progress = job.totalContacts > 0
+                ? Math.round(((job.completedContacts + job.failedContacts) / job.totalContacts) * 100)
                 : 0;
               return (
                 <li key={job.id} className="px-5 py-4">
@@ -253,10 +190,10 @@ function BatchCallPage() {
                     <div className="min-w-0">
                       <p className="text-[0.92rem] font-medium text-ink">{job.name}</p>
                       <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                        {job.total_contacts} contacts · {job.completed_contacts} completed · {job.failed_contacts} failed
+                        {job.totalContacts} contacts · {job.completedContacts} completed · {job.failedContacts} failed
                       </p>
                       <p className="text-[0.75rem] text-muted-foreground">
-                        Created {formatDateTime(job.created_at)}
+                        Created {formatDateTime(job.createdAt)}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -276,6 +213,7 @@ function BatchCallPage() {
                           type="button"
                           onClick={() => toggleMutation.mutate({ id: job.id, currentStatus: job.status })}
                           disabled={toggleMutation.isPending}
+                          aria-label={job.status === "running" ? "Pause campaign" : "Start campaign"}
                           className="rounded-[8px] border border-line px-3 py-1.5 text-[0.82rem] text-ink hover:bg-secondary disabled:opacity-50"
                         >
                           {job.status === "running" ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
@@ -284,7 +222,7 @@ function BatchCallPage() {
                     </div>
                   </div>
                   {/* Progress bar */}
-                  {job.total_contacts > 0 && (
+                  {job.totalContacts > 0 && (
                     <div className="mt-3">
                       <div className="h-1.5 rounded-full bg-secondary">
                         <div

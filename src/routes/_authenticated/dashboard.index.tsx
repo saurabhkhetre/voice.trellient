@@ -1,49 +1,35 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Bot, Phone, BookOpen, PhoneOutgoing, History, BarChart3 } from "lucide-react";
 
 import { PageHeader, Panel, StatCard } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
+import { getDashboardStats, getRecentCalls } from "@/lib/analytics/stats.functions";
 import { formatDateTime, formatDuration, useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/")({
   component: DashboardHome,
 });
 
-async function fetchDashboardStats() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`/api/stats/dashboard`, {
-    headers: { Authorization: `Bearer ${session?.access_token}` }
-  });
-  if (!res.ok) throw new Error("Failed to fetch dashboard stats");
-  return res.json();
-}
-
 function DashboardHome() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
+  const fetchStats = useServerFn(getDashboardStats);
+  const fetchRecentCalls = useServerFn(getRecentCalls);
 
   /* ---- Server-side stats (workspace-scoped, auth-enforced) ---- */
   const stats = useQuery({
     queryKey: ["dashboard-stats"],
     staleTime: 2 * 60_000,
-    queryFn: () => fetchDashboardStats(),
+    queryFn: () => fetchStats(),
   });
 
-  /* ---- Recent calls (client-side — needs full rows for display) ---- */
+  /* ---- Recent calls ---- */
   const recentCalls = useQuery({
     queryKey: ["recent-calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 2 * 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("calls")
-        .select("id, started_at, duration_seconds, caller_number, status, customers(name)")
-        .eq("business_id", businessId!)
-        .order("started_at", { ascending: false })
-        .limit(5);
-      return data ?? [];
-    },
+    queryFn: () => fetchRecentCalls(),
   });
 
   const d = stats.data;
@@ -101,14 +87,14 @@ function DashboardHome() {
             </p>
           ) : (
             <ul className="divide-y divide-line/70">
-              {calls.map((call: any) => (
+              {calls.map((call) => (
                 <li key={call.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                   <div className="min-w-0">
                     <p className="text-[0.92rem] text-ink">
-                      {call.customers?.name ?? call.caller_number ?? "Unknown caller"}
+                      {call.customerName ?? call.callerNumber ?? "Web test call"}
                     </p>
                     <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                      {formatDateTime(call.started_at)} · {formatDuration(call.duration_seconds)}
+                      {formatDateTime(call.startedAt)} · {formatDuration(call.durationSeconds)}
                     </p>
                   </div>
                   <span className="inline-flex items-center rounded-full border border-line px-2.5 py-0.5 text-[0.72rem] font-medium text-muted-foreground">

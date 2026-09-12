@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bot, PlusCircle, Sparkles } from "lucide-react";
@@ -9,12 +10,17 @@ import { CallHistorySection } from "@/components/dashboard/voice/CallHistorySect
 import { FunctionsSection } from "@/components/dashboard/voice/FunctionsSection";
 import { PhoneNumbersSection } from "@/components/dashboard/voice/PhoneNumbersSection";
 import { TestCallPanel } from "@/components/dashboard/voice/TestCallPanel";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { useBusiness } from "@/lib/business/useBusiness";
+import type { Database } from "@/lib/db/types";
+import {
+  createAgentConfig,
+  getAgentRuntime,
+  listAgentConfigs,
+  publishAgentConfig,
+  saveAgentConfig,
+} from "@/lib/voice/agent-configs.functions";
 import { cn } from "@/lib/utils";
 import {
-  fetchAgentRuntime,
   relativeTime,
   runtimeDotClass,
   runtimeLabel,
@@ -52,14 +58,16 @@ const LANGUAGES = [
 ];
 
 const MODELS = [
-  { value: "gpt-4o-realtime-preview", label: "OpenAI GPT-4o Realtime" },
-  { value: "gpt-4o-mini-realtime-preview", label: "OpenAI GPT-4o mini Realtime" },
-  { value: "gemini-2.0-flash-live", label: "Gemini 2.0 Flash Live" },
+  { value: "gpt-realtime", label: "OpenAI gpt-realtime" },
+  { value: "gpt-realtime-mini", label: "OpenAI gpt-realtime mini (lower cost)" },
+  { value: "gemini-2.5-flash-native-audio-latest", label: "Gemini 2.5 Flash native audio" },
+  { value: "gemini-3.1-flash-live-preview", label: "Gemini 3.1 Flash Live (preview)" },
 ];
 
+// Values must match the agent worker's provider registry (voice_agent/providers).
 const PROVIDERS = [
-  { value: "openai", label: "OpenAI Realtime" },
-  { value: "gemini", label: "Gemini Live" },
+  { value: "openai_realtime", label: "OpenAI Realtime" },
+  { value: "gemini_live", label: "Gemini Live" },
 ];
 
 const VOICES = ["alloy", "echo", "shimmer", "verse", "sage", "coral"];
@@ -80,6 +88,11 @@ function VoiceAgentDashboard() {
   const businessId = ctx?.business.id;
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-configs", businessId], [businessId]);
+  const listAgents = useServerFn(listAgentConfigs);
+  const fetchRuntime = useServerFn(getAgentRuntime);
+  const createAgentFn = useServerFn(createAgentConfig);
+  const saveAgentFn = useServerFn(saveAgentConfig);
+  const publishAgentFn = useServerFn(publishAgentConfig);
 
   const agents = useQuery({
     queryKey,
@@ -87,20 +100,16 @@ function VoiceAgentDashboard() {
     staleTime: 30_000,
     queryFn: async () => {
       if (!businessId) return [];
-      const { data, error } = await supabase
-        .from("agent_configs")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as AgentRow[];
+      const rows = await listAgents({ data: { businessId } });
+      return rows as AgentRow[];
     },
   });
 
   const runtime = useQuery<Record<string, AgentRuntime>>({
     queryKey: ["agent-runtime", businessId],
     enabled: Boolean(businessId),
-    queryFn: () => (businessId ? fetchAgentRuntime(businessId) : Promise.resolve({} as Record<string, AgentRuntime>)),
+    queryFn: () =>
+      businessId ? fetchRuntime({ data: { businessId } }) : Promise.resolve({} as Record<string, AgentRuntime>),
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
@@ -122,14 +131,8 @@ function VoiceAgentDashboard() {
   const save = useMutation({
     mutationFn: async () => {
       if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
-      const payload = { ...draft, business_id: businessId } as never;
-      if (selected?.id) {
-        const { error } = await supabase.from("agent_configs").update(payload).eq("id", selected.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("agent_configs").insert(payload);
-        if (error) throw error;
-      }
+      const agentConfigId = selected?.id ?? (await createAgentFn({ data: { businessId } })).id;
+      await saveAgentFn({ data: { agentConfigId, changes: draft } });
     },
     onSuccess: () => {
       toast.success("Agent saved.");
@@ -140,36 +143,9 @@ function VoiceAgentDashboard() {
 
   const publish = useMutation({
     mutationFn: async () => {
-      if (!businessId || !selected?.id) throw new Error("No agent selected.");
-      // Save the current draft first
-      const payload = { ...draft, business_id: businessId } as never;
-      const { error: saveErr } = await supabase.from("agent_configs").update(payload).eq("id", selected.id);
-      if (saveErr) throw saveErr;
-
-      // Calculate new version
-      const currentVersion = (selected as any).version ?? 1;
-      const newVersion = currentVersion + 1;
-
-      // Create version snapshot
-      const { error: versionErr } = await supabase.from("agent_config_versions").insert({
-        agent_config_id: selected.id,
-        business_id: businessId,
-        version: newVersion,
-        config_snapshot: draft as any,
-        published_by: ctx?.userId ?? null,
-      });
-      if (versionErr) throw versionErr;
-
-      // Update agent config version and publish state
-      const { error: updateErr } = await supabase
-        .from("agent_configs")
-        .update({
-          version: newVersion,
-          is_draft: false,
-          published_at: new Date().toISOString(),
-        } as never)
-        .eq("id", selected.id);
-      if (updateErr) throw updateErr;
+      if (!selected?.id) throw new Error("No agent selected.");
+      // Saves the draft, bumps the version and stores a snapshot in one transaction.
+      await publishAgentFn({ data: { agentConfigId: selected.id, changes: draft } });
     },
     onSuccess: () => {
       toast.success("Published! New calls will use this version.");
@@ -181,19 +157,7 @@ function VoiceAgentDashboard() {
   const createAgent = useMutation({
     mutationFn: async () => {
       if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
-      const { data, error } = await supabase
-        .from("agent_configs")
-        .insert({
-          business_id: businessId,
-          name: "Untitled agent",
-          greeting: "Hi, thanks for calling. How can I help you today?",
-          primary_language: "en",
-          enabled: false,
-        } as never)
-        .select("id")
-        .single();
-      if (error) throw error;
-      return data as { id: string };
+      return createAgentFn({ data: { businessId } });
     },
     onSuccess: (row) => {
       setSelectedId(row.id);
@@ -254,11 +218,9 @@ function VoiceAgentDashboard() {
         <div className="flex items-center gap-3">
           {selected && (
             <span className="text-[0.78rem] text-muted-foreground">
-              v{(selected as any).version ?? 1}
-              {(selected as any).is_draft ? " · draft" : ""}
-              {(selected as any).published_at
-                ? ` · published ${new Date((selected as any).published_at).toLocaleDateString()}`
-                : ""}
+              v{selected.version ?? 1}
+              {selected.is_draft ? " · draft" : ""}
+              {selected.published_at ? ` · published ${new Date(selected.published_at).toLocaleDateString()}` : ""}
             </span>
           )}
           <Pill tone={bool("enabled") ? "good" : "warn"}>{bool("enabled") ? "Answering calls" : "Paused"}</Pill>
@@ -365,7 +327,7 @@ function VoiceAgentDashboard() {
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field label="Provider">
                       <select
-                        value={str("model_provider") || "openai"}
+                        value={str("model_provider") || "openai_realtime"}
                         onChange={(e) => set("model_provider", e.target.value)}
                         className="input-base"
                       >

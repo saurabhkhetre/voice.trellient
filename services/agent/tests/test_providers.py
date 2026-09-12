@@ -29,11 +29,18 @@ def test_provider_validation_requires_key() -> None:
         OpenAIRealtimeProvider(stripped).validate()
 
 
-def test_gemini_is_interface_only() -> None:
+def test_gemini_requires_google_key() -> None:
     config = load_config(dict(BASE_ENV))
-    gemini = GeminiLiveProvider(
-        type(config)(**{**config.__dict__, "provider_keys": {"google": "key"}})
-    )
-    gemini.validate()
     with pytest.raises(ProviderNotConfigured):
-        gemini.create_model()
+        GeminiLiveProvider(config).validate()
+
+
+def test_dashboard_short_names_resolve() -> None:
+    config = load_config(dict(BASE_ENV))
+    assert isinstance(build_provider(config, "openai"), OpenAIRealtimeProvider)
+    assert isinstance(build_provider(config, "openai_realtime"), OpenAIRealtimeProvider)
+
+
+def test_unknown_call_provider_rejected() -> None:
+    with pytest.raises(ProviderNotConfigured):
+        build_provider(load_config(dict(BASE_ENV)), "not-a-provider")

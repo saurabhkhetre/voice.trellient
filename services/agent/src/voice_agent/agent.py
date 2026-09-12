@@ -7,6 +7,7 @@ serves every tenant.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -16,17 +17,50 @@ from typing import Any
 
 from livekit.agents import Agent, AgentSession, JobContext, RoomInputOptions
 
+# LiveKit plugins register themselves on import, and registration only works on
+# the main thread. This module is imported when the worker starts, so load them
+# here rather than lazily inside a call. The Google plugin is optional
+# (pip install -e ".[google]").
+from livekit.plugins import openai as _openai_plugin  # noqa: F401
+
+try:
+    from livekit.plugins import google as _google_plugin  # noqa: F401
+except ImportError:
+    _google_plugin = None
+
 from voice_agent.business import BusinessClient, BusinessContext, BusinessDataError
 from voice_agent.config import CallConfig, InfraConfig
 from voice_agent.logging_setup import log_event
 from voice_agent.prompts import AGENT_NAME, SYSTEM_PROMPT, build_instructions
 from voice_agent.providers import build_provider
-from voice_agent.tools import build_tools
+from voice_agent.tools import build_tools, resolve_tool_settings
 
 logger = logging.getLogger("voice_agent.agent")
 
 # Data-channel topic the browser console uses to ask for a human handoff.
 ESCALATION_TOPIC = "trellient.escalate"
+
+# How long the goodbye may take before a call over its time limit is cut.
+GOODBYE_TIMEOUT_S = 20
+
+# Time the agent gets to finish saying goodbye after it calls end_call itself.
+GOODBYE_GRACE_S = 6
+
+# Model errors tolerated before a call is given up on. The plugin retries
+# forever, which leaves the caller listening to silence.
+MAX_MODEL_ERRORS = 3
+
+
+def failure_summary(detail: str) -> str:
+    """A short, human explanation for a call the model could not run."""
+    lowered = detail.lower()
+    if "insufficient_quota" in lowered or "credit" in lowered:
+        return "Call failed: the AI provider account has no credits left, so the agent could not speak."
+    if "invalid_api_key" in lowered or "unauthorized" in lowered or "401" in lowered:
+        return "Call failed: the AI provider rejected the API key."
+    if "model" in lowered and ("not found" in lowered or "does not exist" in lowered or "access" in lowered):
+        return f"Call failed: the realtime model was rejected — {detail[:160]}"
+    return f"Call failed: the AI model could not be reached — {detail[:160]}"
 
 
 class VoiceAgent(Agent):
@@ -59,6 +93,11 @@ class ConversationManager:
         self.call_config: CallConfig | None = None
         self.started_at = time.monotonic()
         self.turns: list[tuple[str, str]] = []
+        self._limit_task: asyncio.Task[None] | None = None
+        self._model_errors = 0
+        self._failed = False
+        self._stopped = False
+        self._ending = False
 
     async def load_business(self, ctx: JobContext) -> BusinessContext | None:
         """Loads business data for this call. Returns None when unconfigured."""
@@ -69,6 +108,7 @@ class ConversationManager:
             return None
         try:
             self.client = BusinessClient()
+            await self.client.connect()
             business = await self.client.load_context(
                 business_id,
                 call_id=metadata.get("call_id"),
@@ -99,27 +139,35 @@ class ConversationManager:
         )
         return business
 
-    async def start(self, ctx: JobContext) -> AgentSession:
+    async def start(self, ctx: JobContext) -> AgentSession | None:
         started = time.monotonic()
         business = await self.load_business(ctx)
 
-        instructions = SYSTEM_PROMPT
-        tools: list[Any] = []
-        greeting = self.infra.default_greeting
+        if business is None or not business.config:
+            # A job can arrive without business metadata — LiveKit redispatches
+            # one after a reconnect. Carrying on would answer the caller as a
+            # generic assistant with no tools, on whichever provider the worker
+            # happens to default to, and file that as an ordinary call. Refuse.
+            log_event(logger, "call.not_linked_abort", room=ctx.room.name)
+            ctx.shutdown(reason="business_not_linked")
+            return None
 
-        # Build per-call config from DB agent_configs row
-        if business is not None and business.config:
-            self.call_config = CallConfig.from_db(business.config, self.infra)
-            instructions = build_instructions(business.config, business.business)
-            if self.client is not None:
-                tools = build_tools(self.client, business)
-            greeting = self.call_config.greeting
-        else:
-            self.call_config = CallConfig(
-                provider=self.infra.default_provider,
-                model=self.infra.default_model,
-                voice=self.infra.default_voice,
-                greeting=self.infra.default_greeting,
+        self.call_config = CallConfig.from_db(business.config, self.infra)
+        instructions = build_instructions(business.config, business.business)
+        greeting = self.call_config.greeting
+        tools: list[Any] = []
+        if self.client is not None:
+            # The dashboard's Functions tab decides what this agent can do.
+            settings: dict[str, bool] = {}
+            with contextlib.suppress(Exception):
+                settings = await self.client.load_tool_settings(business)
+            disabled, extra = resolve_tool_settings(settings)
+            tools = build_tools(
+                self.client,
+                business,
+                disabled=disabled,
+                extra=extra,
+                on_end_call=lambda reason: self._end_call(ctx, reason),
             )
 
         # Build provider dynamically from the DB config's model_provider
@@ -153,16 +201,76 @@ class ConversationManager:
             startup_ms=round((time.monotonic() - started) * 1000),
         )
 
-        await session.generate_reply(instructions=f"Greet the caller: {greeting}")
+        # Rows created before the agent joined (browser test calls, outbound)
+        # start as "ringing"; the call is live from here.
+        if self.client is not None and self.business is not None:
+            with contextlib.suppress(Exception):
+                await self.client.mark_answered(self.business)
+
+        self._limit_task = asyncio.create_task(self._enforce_call_limit(ctx))
+
+        # Spelled out, because a realtime model asked only to "greet the caller"
+        # improvises — especially when the line is quiet as it connects.
+        await session.generate_reply(
+            instructions=(
+                "Open the call by saying this greeting word for word, then stop and wait "
+                f"for the caller to speak: {greeting}"
+            )
+        )
         return session
+
+    async def _enforce_call_limit(self, ctx: JobContext) -> None:
+        """Ends the call once the agent's max_call_seconds is reached, after a short goodbye."""
+        limit = self.call_config.max_call_seconds if self.call_config else CallConfig.max_call_seconds
+        await asyncio.sleep(limit)
+        log_event(logger, "call.limit_reached", room=ctx.room.name, limit_s=limit)
+        if self.session is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(
+                    self.session.generate_reply(
+                        instructions=(
+                            "Tell the caller this call has reached its time limit, that their "
+                            "details are saved and someone will follow up if needed, then say "
+                            "goodbye. One or two short sentences."
+                        )
+                    ),
+                    timeout=GOODBYE_TIMEOUT_S,
+                )
+        ctx.shutdown(reason="max_call_seconds")
+
+    async def _abort(self, ctx: JobContext, detail: str) -> None:
+        """Ends a call the model can't run, recording why instead of leaving silence."""
+        if self._failed:
+            return
+        self._failed = True
+        log_event(logger, "call.aborted", room=ctx.room.name, detail=detail[:300])
+        if self.client is not None and self.business is not None:
+            with contextlib.suppress(Exception):
+                await self.client.fail_call(
+                    self.business,
+                    reason=failure_summary(detail),
+                    duration_seconds=int(time.monotonic() - self.started_at),
+                )
+        ctx.shutdown(reason="model_error")
+
+    def _end_call(self, ctx: JobContext, reason: str) -> None:
+        """Hangs up once the agent's goodbye has played, for the End call function."""
+        if self._ending:
+            return
+        self._ending = True
+        log_event(logger, "call.ended_by_agent", room=ctx.room.name, reason=reason[:160])
+
+        async def close() -> None:
+            await asyncio.sleep(GOODBYE_GRACE_S)
+            ctx.shutdown(reason="agent_ended_call")
+
+        asyncio.create_task(close())  # noqa: RUF006 - fire-and-forget teardown
 
     def _record(self, speaker: str, text: str) -> None:
         if not text.strip():
             return
         self.turns.append((speaker, text))
         if self.client and self.business:
-            import asyncio
-
             asyncio.create_task(  # noqa: RUF006 - fire-and-forget persistence
                 self._persist(speaker, text)
             )
@@ -198,7 +306,15 @@ class ConversationManager:
 
         @session.on("error")
         def _on_error(event) -> None:  # noqa: ANN001
-            log_event(logger, "session.error", detail=str(getattr(event, "error", event)))
+            error = getattr(event, "error", event)
+            detail = str(error)
+            log_event(logger, "session.error", detail=detail)
+            self._model_errors += 1
+            # The plugin retries a failure it can't recover from — no credit on
+            # the account, a rejected key, a withdrawn model — which leaves the
+            # caller in silence. Give up and close the call with the reason.
+            if not bool(getattr(error, "recoverable", True)) or self._model_errors >= MAX_MODEL_ERRORS:
+                asyncio.create_task(self._abort(ctx, detail))  # noqa: RUF006
 
     async def request_escalation(self, reason: str) -> None:
         """Files a human handoff for the live call and tells the caller."""
@@ -230,23 +346,35 @@ class ConversationManager:
         return f"Caller asked: {first}. {len(self.turns)} turns exchanged."
 
     async def stop(self) -> None:
+        """Closes the call row and the session. Safe to call more than once."""
+        if self._stopped:
+            return
+        self._stopped = True
+        if self._limit_task is not None:
+            self._limit_task.cancel()
         duration = int(time.monotonic() - self.started_at)
         if self.client and self.business:
-            with contextlib.suppress(Exception):
-                await self.client.finish_call(
-                    self.business, duration_seconds=duration, summary=self._summary()
-                )
+            # A call given up on is already closed, with the reason on the row.
+            if not self._failed:
+                with contextlib.suppress(Exception):
+                    await self.client.finish_call(
+                        self.business, duration_seconds=duration, summary=self._summary()
+                    )
             with contextlib.suppress(Exception):
                 await self.client.aclose()
         if self.session is not None:
-            await self.session.aclose()
-            log_event(logger, "session.stopped", duration_s=duration)
+            with contextlib.suppress(Exception):
+                await self.session.aclose()
+            log_event(logger, "session.stopped", duration_s=duration, failed=self._failed)
             self.session = None
 
 
 async def entrypoint(ctx: JobContext, infra: InfraConfig) -> None:
     """Job entrypoint: connect to the room and run one conversation."""
     manager = ConversationManager(infra)
+    # Runs when the caller hangs up or the job ends for any other reason, and
+    # writes the duration, summary and tools used onto the call row.
+    ctx.add_shutdown_callback(manager.stop)
 
     await ctx.connect()
     log_event(logger, "room.connected", room=ctx.room.name)
@@ -258,6 +386,15 @@ async def entrypoint(ctx: JobContext, infra: InfraConfig) -> None:
     @ctx.room.on("participant_disconnected")
     def _on_leave(participant) -> None:  # noqa: ANN001
         log_event(logger, "user.left", identity=participant.identity)
+        # The caller hung up. Without this the job sits in an empty room until
+        # max_call_seconds: the call row stays in_progress, its duration and
+        # tools_used are never written, and the realtime model keeps running.
+        remaining = [
+            p for p in ctx.room.remote_participants.values() if p.sid != participant.sid
+        ]
+        if not remaining:
+            log_event(logger, "call.caller_left", room=ctx.room.name)
+            ctx.shutdown(reason="caller_left")
 
     @ctx.room.on("data_received")
     def _on_data(packet) -> None:  # noqa: ANN001 - SDK packet object
@@ -268,8 +405,6 @@ async def entrypoint(ctx: JobContext, infra: InfraConfig) -> None:
             payload = json.loads(bytes(getattr(packet, "data", b"")).decode("utf-8"))
             if isinstance(payload, dict) and payload.get("reason"):
                 reason = str(payload["reason"])[:120]
-        import asyncio
-
         asyncio.create_task(manager.request_escalation(reason))  # noqa: RUF006
 
     @ctx.room.on("disconnected")

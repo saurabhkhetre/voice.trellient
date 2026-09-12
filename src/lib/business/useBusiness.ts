@@ -1,49 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { getBusinessContext, type BusinessContextPayload } from "@/lib/business/business.functions";
 
-export type Business = Database["public"]["Tables"]["businesses"]["Row"];
-export type BusinessRole = Database["public"]["Enums"]["business_role"];
-
-export interface BusinessContext {
-  business: Business;
-  role: BusinessRole;
-  userId: string;
-  email: string | null;
-}
+export type { Business, BusinessRole } from "@/lib/business/business.functions";
+export type BusinessContext = BusinessContextPayload;
 
 /**
  * Resolves the signed-in user's business membership. The business id is always
  * derived from the session — never from the browser URL or user input.
  */
 export function useBusiness() {
+  const getContext = useServerFn(getBusinessContext);
   return useQuery<BusinessContext | null>({
     queryKey: ["business-context"],
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
-    queryFn: async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth.user;
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from("business_users")
-        .select("role, business_id, businesses(*)")
-        .eq("auth_user_id", user.id)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data?.businesses) return null;
-
-      return {
-        business: data.businesses as Business,
-        role: data.role,
-        userId: user.id,
-        email: user.email ?? null,
-      };
-    },
+    queryFn: () => getContext(),
   });
 }
 

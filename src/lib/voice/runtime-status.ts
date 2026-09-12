@@ -1,5 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
-
 export type RuntimeState = "idle" | "connecting" | "streaming" | "escalated" | "paused";
 
 export type AgentRuntime = {
@@ -47,20 +45,19 @@ export function relativeTime(iso: string | null) {
   return `${Math.round(h / 24)}d ago`;
 }
 
-/** Derives live per-agent runtime state from recent call activity. */
-export async function fetchAgentRuntime(businessId: string): Promise<Record<string, AgentRuntime>> {
-  const since = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
-  const { data, error } = await supabase
-    .from("calls")
-    .select("agent_config_id, status, escalation_required, started_at, answered_at, ended_at")
-    .eq("business_id", businessId)
-    .gte("started_at", since)
-    .order("started_at", { ascending: false })
-    .limit(300);
-  if (error) throw error;
+export type RuntimeCallRow = {
+  agent_config_id: string | null;
+  status: string;
+  escalation_required: boolean;
+  started_at: string | null;
+  answered_at: string | null;
+  ended_at: string | null;
+};
 
+/** Derives live per-agent runtime state from recent call activity, newest call first. */
+export function deriveAgentRuntime(calls: RuntimeCallRow[]): Record<string, AgentRuntime> {
   const map: Record<string, AgentRuntime> = {};
-  for (const call of data ?? []) {
+  for (const call of calls) {
     const id = call.agent_config_id;
     if (!id) continue;
     const stamp = call.ended_at ?? call.answered_at ?? call.started_at ?? null;

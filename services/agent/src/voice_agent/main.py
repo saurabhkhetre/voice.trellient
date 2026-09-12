@@ -10,12 +10,16 @@ and in production LiveKit Cloud runs:
 from __future__ import annotations
 
 import functools
+from pathlib import Path
 
+from dotenv import load_dotenv
 from livekit.agents import JobContext, WorkerOptions, cli
 
 from voice_agent.agent import entrypoint
 from voice_agent.config import ConfigError, load_config
 from voice_agent.logging_setup import log_event, setup_logging
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 
 def main() -> None:

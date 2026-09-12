@@ -35,8 +35,8 @@ export const PROVIDERS: ProviderDefinition[] = [
     languages: ["en", "hi", "mr", "es", "fr", "de", "ja", "zh", "ko", "pt"],
     models: [
       {
-        id: "gpt-4o-realtime-preview",
-        label: "GPT-4o Realtime",
+        id: "gpt-realtime",
+        label: "gpt-realtime",
         voices: [
           { id: "alloy", label: "Alloy" },
           { id: "ash", label: "Ash" },
@@ -49,8 +49,8 @@ export const PROVIDERS: ProviderDefinition[] = [
         ],
       },
       {
-        id: "gpt-4o-mini-realtime-preview",
-        label: "GPT-4o Mini Realtime",
+        id: "gpt-realtime-mini",
+        label: "gpt-realtime mini",
         voices: [
           { id: "alloy", label: "Alloy" },
           { id: "ash", label: "Ash" },
@@ -71,14 +71,31 @@ export const PROVIDERS: ProviderDefinition[] = [
     languages: ["en", "hi", "es", "fr", "de", "ja", "zh", "ko", "pt"],
     models: [
       {
-        id: "gemini-2.0-flash-live-001",
-        label: "Gemini 2.0 Flash Live",
+        id: "gemini-2.5-flash-native-audio-latest",
+        label: "Gemini 2.5 Flash native audio",
         voices: [
           { id: "Puck", label: "Puck" },
           { id: "Charon", label: "Charon" },
           { id: "Kore", label: "Kore" },
           { id: "Fenrir", label: "Fenrir" },
           { id: "Aoede", label: "Aoede" },
+          { id: "Leda", label: "Leda" },
+          { id: "Orus", label: "Orus" },
+          { id: "Zephyr", label: "Zephyr" },
+        ],
+      },
+      {
+        id: "gemini-3.1-flash-live-preview",
+        label: "Gemini 3.1 Flash Live (preview)",
+        voices: [
+          { id: "Puck", label: "Puck" },
+          { id: "Charon", label: "Charon" },
+          { id: "Kore", label: "Kore" },
+          { id: "Fenrir", label: "Fenrir" },
+          { id: "Aoede", label: "Aoede" },
+          { id: "Leda", label: "Leda" },
+          { id: "Orus", label: "Orus" },
+          { id: "Zephyr", label: "Zephyr" },
         ],
       },
     ],

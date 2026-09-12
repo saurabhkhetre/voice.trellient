@@ -1,54 +1,26 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-
-type CallRow = {
-  id: string;
-  caller_number: string | null;
-  started_at: string;
-  duration_seconds: number | null;
-  status: string;
-  language: string | null;
-  outcome: string | null;
-  summary: string | null;
-  escalation_required: boolean;
-};
+import { getCallDetail, listAgentCalls } from "@/lib/voice/calls.functions";
 
 /** Call history for the selected agent, with expandable transcripts. */
 export function CallHistorySection({ agentId }: { agentId: string }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const fetchCalls = useServerFn(listAgentCalls);
+  const fetchDetail = useServerFn(getCallDetail);
 
   const calls = useQuery({
     queryKey: ["agent-calls", agentId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("calls")
-        .select(
-          "id, caller_number, started_at, duration_seconds, status, language, outcome, summary, escalation_required",
-        )
-        .eq("agent_config_id", agentId)
-        .order("started_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return (data ?? []) as CallRow[];
-    },
+    queryFn: () => fetchCalls({ data: { agentConfigId: agentId } }),
   });
 
   const transcript = useQuery({
     queryKey: ["call-transcript", openId],
     enabled: Boolean(openId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("call_transcripts")
-        .select("id, speaker, text, timestamp")
-        .eq("call_id", openId!)
-        .order("timestamp", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async () => (await fetchDetail({ data: { callId: openId! } })).transcripts,
   });
 
   const list = calls.data ?? [];
@@ -76,21 +48,21 @@ export function CallHistorySection({ agentId }: { agentId: string }) {
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[0.88rem] text-ink">
-                    {call.caller_number ?? "Web test call"}
+                    {call.callerNumber ?? "Web test call"}
                   </span>
                   <span className="text-[0.75rem] text-muted-foreground">
-                    {new Date(call.started_at).toLocaleString()} ·{" "}
-                    {call.duration_seconds != null ? `${call.duration_seconds}s` : "—"} ·{" "}
+                    {new Date(call.startedAt).toLocaleString()} ·{" "}
+                    {call.durationSeconds != null ? `${call.durationSeconds}s` : "—"} ·{" "}
                     {(call.language ?? "en").toUpperCase()}
                   </span>
                 </span>
                 <span
                   className={cn(
                     "shrink-0 rounded-full border px-2.5 py-1 text-[0.72rem]",
-                    call.escalation_required ? "border-brass text-brass" : "border-line text-muted-foreground",
+                    call.escalationRequired ? "border-brass text-brass" : "border-line text-muted-foreground",
                   )}
                 >
-                  {call.escalation_required ? "escalated" : call.status}
+                  {call.escalationRequired ? "escalated" : call.status}
                 </span>
               </button>
 

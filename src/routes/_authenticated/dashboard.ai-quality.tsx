@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 import { PageHeader, Panel, Pill, StatCard, EmptyState } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
 import { useBusiness, formatDateTime, formatDuration } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
+import { listCalls } from "@/lib/voice/calls.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/ai-quality")({
   component: AIQualityPage,
@@ -23,7 +24,6 @@ type CallQA = {
   outcome: string | null;
   language: string | null;
   latency_ms: number | null;
-  sentiment: string | null;
 };
 
 /**
@@ -42,8 +42,6 @@ function computeScore(call: CallQA): number {
   if (call.latency_ms && call.latency_ms > 2000) score -= 10;
   if (call.outcome === "resolved") score += 10;
   if (call.outcome === "abandoned") score -= 10;
-  if (call.sentiment === "positive") score += 5;
-  if (call.sentiment === "negative") score -= 10;
   return Math.max(0, Math.min(100, score));
 }
 
@@ -53,7 +51,6 @@ function detectIssues(call: CallQA): string[] {
   if (call.escalation_required) issues.push("Required human escalation");
   if (call.latency_ms && call.latency_ms > 2000) issues.push("High response latency");
   if (call.duration_seconds && call.duration_seconds > 300) issues.push("Unusually long call duration");
-  if (call.sentiment === "negative") issues.push("Negative caller sentiment");
   if (call.outcome === "abandoned") issues.push("Call abandoned by caller");
   return issues;
 }
@@ -65,20 +62,28 @@ function AIQualityPage() {
   const businessId = ctx?.business.id;
   const [selected, setSelected] = useState<string | null>(null);
 
+  const fetchCalls = useServerFn(listCalls);
+
   const callsQuery = useQuery({
     queryKey: ["qa-calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("calls")
-        .select("id, caller_number, started_at, duration_seconds, status, escalation_required, intent, outcome, language, latency_ms, sentiment")
-        .eq("business_id", businessId!)
-        .in("status", ["completed", "failed", "missed"])
-        .order("started_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return (data ?? []) as CallQA[];
+      const calls = await fetchCalls({ data: { businessId: businessId!, scope: "finished" } });
+      return calls.map(
+        (call): CallQA => ({
+          id: call.id,
+          caller_number: call.callerNumber,
+          started_at: call.startedAt,
+          duration_seconds: call.durationSeconds,
+          status: call.status,
+          escalation_required: call.escalationRequired,
+          intent: call.intent,
+          outcome: call.outcome,
+          language: call.language,
+          latency_ms: call.latencyMs,
+        }),
+      );
     },
   });
 
@@ -203,7 +208,6 @@ function CallQADetail({ call }: { call: CallQA }) {
     { label: "No escalation needed", pass: !call.escalation_required },
     { label: "Response latency acceptable", pass: !call.latency_ms || call.latency_ms < 2000 },
     { label: "Duration within normal range", pass: !call.duration_seconds || (call.duration_seconds > 5 && call.duration_seconds < 300) },
-    { label: "Positive or neutral sentiment", pass: call.sentiment !== "negative" },
   ];
 
   return (

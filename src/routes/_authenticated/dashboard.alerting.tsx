@@ -1,27 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Bell, PlusCircle, Trash2, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader, Panel, Pill, EmptyState } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  createAlertRule,
+  deleteAlertRule,
+  listAlertRules,
+  setAlertRuleEnabled,
+  type AlertRule,
+} from "@/lib/alerts/alerts.functions";
 import { useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/alerting")({
   component: AlertingPage,
 });
-
-type AlertRule = {
-  id: string;
-  name: string;
-  condition_type: string;
-  condition_config: Record<string, unknown>;
-  notification_channels: string[];
-  enabled: boolean;
-  last_triggered_at: string | null;
-  created_at: string;
-};
 
 const CONDITION_TYPES = [
   { value: "drop_rate", label: "Call Drop Rate", description: "Triggers when drop rate exceeds threshold" },
@@ -35,6 +31,10 @@ function AlertingPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
   const qc = useQueryClient();
+  const fetchRules = useServerFn(listAlertRules);
+  const createRule = useServerFn(createAlertRule);
+  const setRuleEnabled = useServerFn(setAlertRuleEnabled);
+  const removeRule = useServerFn(deleteAlertRule);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -47,36 +47,24 @@ function AlertingPage() {
     queryKey: ["alert-rules", businessId],
     enabled: Boolean(businessId),
     staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("alert_rules")
-        .select("id, name, condition_type, condition_config, notification_channels, enabled, last_triggered_at, created_at")
-        .eq("business_id", businessId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as AlertRule[];
-    },
+    queryFn: () => fetchRules({ data: { businessId: businessId! } }),
   });
 
   const rules = rulesQuery.data ?? [];
 
   /* ---- Create rule ---- */
   const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!businessId || !newName.trim()) throw new Error("Missing required fields.");
-      const conditionConfig: Record<string, unknown> = {};
-      if (newThreshold.trim()) conditionConfig["threshold"] = Number(newThreshold) || newThreshold;
-      if (newConditionType === "drop_rate") conditionConfig["window_minutes"] = 60;
-      if (newConditionType === "error_count") conditionConfig["window_minutes"] = 30;
-
-      const { error } = await supabase.from("alert_rules").insert({
-        business_id: businessId,
-        name: newName.trim(),
-        condition_type: newConditionType,
-        condition_config: conditionConfig as any,
-        notification_channels: JSON.stringify([newChannel]) as any,
+    mutationFn: () => {
+      if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
+      return createRule({
+        data: {
+          businessId,
+          name: newName,
+          conditionType: newConditionType,
+          threshold: newConditionType === "escalation" ? "" : newThreshold,
+          channel: newChannel,
+        },
       });
-      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       toast.success("Alert rule created.");
@@ -94,27 +82,19 @@ function AlertingPage() {
 
   /* ---- Toggle rule ---- */
   const toggleMutation = useMutation({
-    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const { error } = await supabase
-        .from("alert_rules")
-        .update({ enabled: !enabled })
-        .eq("id", id);
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      setRuleEnabled({ data: { ruleId: id, enabled: !enabled } }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["alert-rules"] });
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to update alert rule.");
     },
   });
 
   /* ---- Delete rule ---- */
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("alert_rules")
-        .delete()
-        .eq("id", id);
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: (id: string) => removeRule({ data: { ruleId: id } }),
     onSuccess: () => {
       toast.success("Alert rule deleted.");
       void qc.invalidateQueries({ queryKey: ["alert-rules"] });
@@ -130,19 +110,12 @@ function AlertingPage() {
   }
 
   function conditionLabel(rule: AlertRule): string {
-    const t = CONDITION_TYPES.find((c) => c.value === rule.condition_type);
-    const config = rule.condition_config as Record<string, unknown> | null;
-    const threshold = config?.["threshold"];
+    const t = CONDITION_TYPES.find((c) => c.value === rule.conditionType);
+    const threshold = rule.conditionConfig["threshold"];
     if (threshold != null) {
-      return `${t?.label ?? rule.condition_type}: threshold ${threshold}`;
+      return `${t?.label ?? rule.conditionType}: threshold ${threshold}`;
     }
-    return t?.description ?? rule.condition_type;
-  }
-
-  function channelFromRule(rule: AlertRule): string {
-    const channels = rule.notification_channels;
-    if (Array.isArray(channels) && channels.length > 0) return channels[0] as string;
-    return "email";
+    return t?.description ?? rule.conditionType;
   }
 
   return (
@@ -245,19 +218,20 @@ function AlertingPage() {
                   <div>
                     <p className="text-[0.92rem] font-medium text-ink">{rule.name}</p>
                     <p className="mt-0.5 text-[0.8rem] text-muted-foreground">{conditionLabel(rule)}</p>
-                    {rule.last_triggered_at && (
+                    {rule.lastTriggeredAt && (
                       <p className="mt-0.5 text-[0.72rem] text-muted-foreground">
-                        Last triggered: {new Date(rule.last_triggered_at).toLocaleDateString()}
+                        Last triggered: {new Date(rule.lastTriggeredAt).toLocaleDateString()}
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Pill tone="neutral">{channelFromRule(rule)}</Pill>
+                  <Pill tone="neutral">{rule.notificationChannels[0] ?? "email"}</Pill>
                   <button
                     type="button"
                     onClick={() => toggleMutation.mutate({ id: rule.id, enabled: rule.enabled })}
                     disabled={toggleMutation.isPending}
+                    aria-label={rule.enabled ? "Turn rule off" : "Turn rule on"}
                     className="text-muted-foreground hover:text-ink disabled:opacity-50"
                   >
                     {rule.enabled ? <ToggleRight className="size-5 text-ink" /> : <ToggleLeft className="size-5" />}
@@ -266,6 +240,7 @@ function AlertingPage() {
                     type="button"
                     onClick={() => deleteMutation.mutate(rule.id)}
                     disabled={deleteMutation.isPending}
+                    aria-label="Delete rule"
                     className="text-muted-foreground hover:text-destructive disabled:opacity-50"
                   >
                     <Trash2 className="size-4" />

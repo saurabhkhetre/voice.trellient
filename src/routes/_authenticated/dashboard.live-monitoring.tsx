@@ -11,9 +11,9 @@ import {
 } from "livekit-client";
 
 import { PageHeader, Panel, Pill, StatCard } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
 import { useBusiness } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
+import { listCalls } from "@/lib/voice/calls.functions";
 import { createCallMonitorSession, type MonitorSession } from "@/lib/voice/monitor.functions";
 import { TRANSCRIPTION_TOPIC, type TranscriptEntry } from "@/lib/voice/contract";
 
@@ -35,6 +35,7 @@ type ActiveCall = {
 function LiveMonitoringPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
+  const fetchCalls = useServerFn(listCalls);
 
   const activeCalls = useQuery({
     queryKey: ["live-calls", businessId],
@@ -42,14 +43,19 @@ function LiveMonitoringPage() {
     refetchInterval: 5_000, // poll every 5s for active calls
     staleTime: 3_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("calls")
-        .select("id, caller_number, destination_number, agent_config_id, room_name, status, started_at, escalation_required")
-        .eq("business_id", businessId!)
-        .in("status", ["in_progress", "ringing"])
-        .order("started_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as ActiveCall[];
+      const calls = await fetchCalls({ data: { businessId: businessId!, scope: "active" } });
+      return calls.map(
+        (call): ActiveCall => ({
+          id: call.id,
+          caller_number: call.callerNumber,
+          destination_number: call.destinationNumber,
+          agent_config_id: call.agentConfigId,
+          room_name: call.roomName,
+          status: call.status,
+          started_at: call.startedAt,
+          escalation_required: call.escalationRequired,
+        }),
+      );
     },
   });
 
@@ -321,7 +327,8 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
       analyser.getByteTimeDomainData(data);
 
       ctx2d.lineWidth = 2;
-      ctx2d.strokeStyle = "var(--ink, #1a1a1a)";
+      // A canvas can't read CSS variables, so resolve the theme's ink color.
+      ctx2d.strokeStyle = getComputedStyle(canvas).getPropertyValue("--ink").trim() || "#1a2b4c";
       ctx2d.beginPath();
 
       const sliceWidth = w / bufferLen;

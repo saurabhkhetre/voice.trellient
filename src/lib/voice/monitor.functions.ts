@@ -1,12 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-import { requireBusinessMembership } from "@/lib/supabase/require-business";
+import { getPool } from "@/lib/db/pg.server";
+import { requireAuth } from "@/lib/auth/middleware";
+import { requireBusinessMembership } from "@/lib/auth/access";
 
 const monitorInput = z.object({
   callId: z.string().uuid(),
-  roomName: z.string().min(1),
+  /** Ignored: the room always comes from the call record. Kept so existing callers still type-check. */
+  roomName: z.string().optional(),
 });
 
 export type MonitorSession =
@@ -18,31 +20,31 @@ export type MonitorSession =
  * The token can subscribe to audio and data (transcripts) but cannot publish.
  */
 export const createCallMonitorSession = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((raw: { callId: string; roomName: string }) => monitorInput.parse(raw))
+  .middleware([requireAuth])
+  .validator((raw: { callId: string; roomName?: string }) => monitorInput.parse(raw))
   .handler(async ({ data, context }): Promise<MonitorSession> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // Verify call exists and belongs to user's workspace
-    const { data: call, error: callErr } = await supabaseAdmin
-      .from("calls")
-      .select("id, business_id, status")
-      .eq("id", data.callId)
-      .maybeSingle();
-
-    if (callErr || !call) {
+    const { rows } = await getPool().query<{
+      business_id: string;
+      status: string;
+      room_name: string | null;
+    }>(`SELECT business_id, status, room_name FROM calls WHERE id = $1`, [data.callId]);
+    const call = rows[0];
+    if (!call) {
       return { ok: false, error: "Call not found." };
+    }
+
+    // Verify access before revealing anything else about the call.
+    try {
+      await requireBusinessMembership(context.userId, call.business_id);
+    } catch {
+      return { ok: false, error: "You do not have access to this call." };
     }
 
     if (!["ringing", "in_progress"].includes(call.status)) {
       return { ok: false, error: "This call is no longer active." };
     }
-
-    // Verify user has access
-    try {
-      await requireBusinessMembership(context.supabase, context.userId, call.business_id);
-    } catch {
-      return { ok: false, error: "You do not have access to this call." };
+    if (!call.room_name) {
+      return { ok: false, error: "This call has no voice room to listen to." };
     }
 
     // Mint subscriber-only token
@@ -58,18 +60,18 @@ export const createCallMonitorSession = createServerFn({ method: "POST" })
     const ttl = 60 * 30; // 30 minutes
     const at = new AccessToken(apiKey, apiSecret, { identity, ttl });
     at.addGrant({
-      room: data.roomName,
+      room: call.room_name,
       roomJoin: true,
       canSubscribe: true,
-      canPublish: false,        // Monitor cannot speak
-      canPublishData: false,    // Monitor cannot send data
-      hidden: true,             // Don't show monitor as a participant
+      canPublish: false, // Monitor cannot speak
+      canPublishData: false, // Monitor cannot send data
+      hidden: true, // Don't show monitor as a participant
     });
 
     return {
       ok: true,
       token: await at.toJwt(),
       serverUrl: url,
-      roomName: data.roomName,
+      roomName: call.room_name,
     };
   });

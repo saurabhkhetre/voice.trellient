@@ -1,52 +1,64 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
+import { getPool } from "@/lib/db/pg.server";
+import { requireAuth } from "@/lib/auth/middleware";
+
+const input = z.object({
+  companyName: z.string().trim().min(1).max(120).optional(),
+});
 
 /**
  * Creates a workspace for the signed-in user when they are not a member of one
  * yet, and makes them its owner. Idempotent: returns the existing membership.
  */
 export const provisionWorkspace = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const userId = context.userId;
+  .middleware([requireAuth])
+  .validator((raw: { companyName?: string }) => input.parse(raw))
+  .handler(async ({ data, context }): Promise<{ businessId: string; created: boolean }> => {
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
 
-    const existing = await supabaseAdmin
-      .from("business_users")
-      .select("business_id")
-      .eq("auth_user_id", userId)
-      .limit(1)
-      .maybeSingle();
-    if (existing.error) throw new Error(existing.error.message);
-    if (existing.data) return { businessId: existing.data.business_id, created: false };
+      const existing = await client.query<{ business_id: string }>(
+        `SELECT business_id FROM business_users
+         WHERE auth_user_id = $1
+         ORDER BY created_at ASC
+         LIMIT 1`,
+        [context.userId],
+      );
+      const membership = existing.rows[0];
+      if (membership) {
+        await client.query("COMMIT");
+        return { businessId: membership.business_id, created: false };
+      }
 
-    const email = (context.claims as Record<string, unknown> & { email?: string })?.email ?? null;
-    const business = await supabaseAdmin
-      .from("businesses")
-      .insert({
-        name: email ? `${email.split("@")[0]}'s workspace` : "My workspace",
-        email,
-        default_language: "en",
-        timezone: "Asia/Kolkata",
-      })
-      .select("id")
-      .single();
-    if (business.error) throw new Error(business.error.message);
+      const email = context.email;
+      const name = data.companyName ?? (email ? `${email.split("@")[0]}'s workspace` : "My workspace");
+      const business = await client.query<{ id: string }>(
+        `INSERT INTO businesses (name, email, default_language, timezone)
+         VALUES ($1, $2, 'en', 'Asia/Kolkata')
+         RETURNING id`,
+        [name, email],
+      );
+      const businessId = business.rows[0]!.id;
 
-    const membership = await supabaseAdmin
-      .from("business_users")
-      .insert({ business_id: business.data.id, auth_user_id: userId, role: "owner" });
-    if (membership.error) throw new Error(membership.error.message);
+      await client.query(
+        `INSERT INTO business_users (business_id, auth_user_id, role) VALUES ($1, $2, 'owner')`,
+        [businessId, context.userId],
+      );
+      await client.query(
+        `INSERT INTO agent_configs (business_id, name, greeting, primary_language, enabled)
+         VALUES ($1, 'Front desk agent', 'Hi, thanks for calling. How can I help you today?', 'en', false)`,
+        [businessId],
+      );
 
-    const agent = await supabaseAdmin.from("agent_configs").insert({
-      business_id: business.data.id,
-      name: "Front desk agent",
-      greeting: "Hi, thanks for calling. How can I help you today?",
-      primary_language: "en",
-      enabled: false,
-    });
-    if (agent.error) throw new Error(agent.error.message);
-
-    return { businessId: business.data.id, created: true };
+      await client.query("COMMIT");
+      return { businessId, created: true };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   });

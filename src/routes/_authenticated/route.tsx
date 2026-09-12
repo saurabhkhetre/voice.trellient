@@ -1,20 +1,13 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
-import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUser } from "@/lib/auth/auth.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    let session = null;
-    try {
-      const { data } = await supabase.auth.getSession();
-      session = data.session ?? null;
-    } catch (cause) {
-      // Preview auth brokering can fail transiently; treat as signed out.
-      console.error("[auth] session lookup failed", cause);
-    }
-    if (!session?.user) throw redirect({ to: "/auth" });
-    return { user: session.user };
+    const user = await getCurrentUser();
+    if (!user) throw redirect({ to: "/auth" });
+    return { user };
   },
   // Without these, a slow or failed session lookup renders an empty page.
   pendingMs: 0,

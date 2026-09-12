@@ -1,9 +1,15 @@
 spring:
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
+    # JDBC form, kept separate from DATABASE_URL, which the web app and the
+    # agent read as a postgres:// URI.
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/trellient}
     username: ${DATABASE_USERNAME:postgres}
     password: ${DATABASE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        # Lets JPA write plain strings into Postgres enum columns (calls.status, calls.direction).
+        stringtype: unspecified
   jpa:
     hibernate:
       ddl-auto: none
@@ -12,9 +18,10 @@ spring:
       hibernate:
         format_sql: true
 
-supabase:
-  jwt:
-    secret: ${SUPABASE_JWT_SECRET:dummy_secret_for_local_development_replace_this_in_production}
+app:
+  cors:
+    # Comma-separated browser origins allowed to call this API.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
 
 livekit:
   url: ${LIVEKIT_URL:ws://localhost:7880}

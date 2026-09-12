@@ -7,7 +7,9 @@ business is hardcoded here.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 AGENT_NAME = "Trellient Customer Agent"
 
@@ -60,6 +62,20 @@ def build_instructions(config: dict[str, Any], business: dict[str, Any]) -> str:
         f"{LANGUAGE_NAMES.get(config.get('primary_language') or 'en', 'English')} and switch "
         "immediately and completely to whichever of those languages the caller uses, including "
         "mid-call. Do not mix languages in one sentence unless the caller does."
+    )
+
+    # Realtime models have no clock, so "tomorrow at eleven" is unbookable
+    # without this line.
+    timezone = business.get("timezone") or "Asia/Kolkata"
+    try:
+        now = datetime.now(ZoneInfo(timezone))
+    except Exception:  # noqa: BLE001 - an unknown timezone must not break a call
+        now = datetime.now()
+        timezone = "local time"
+    clock = f"{now:%A %d %B %Y}, {now.hour % 12 or 12}:{now.minute:02d} {'am' if now.hour < 12 else 'pm'}"
+    sections.append(
+        f"Right now it is {clock} ({timezone}). Work out today, tomorrow and weekday names from that, "
+        "and use YYYY-MM-DD dates with the booking tools."
     )
 
     if hours:

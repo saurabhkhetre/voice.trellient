@@ -13,10 +13,13 @@ working phone calls until step 6 passes.
 | Inbound webhook | `src/routes/api/public/telephony/exotel.ts` |
 | Agent runtime that joins the room and uses business data | `services/agent/` |
 
-The webhook resolves the business by matching the dialled number against
-`businesses.phone`, refuses the call when the business's agent config is
-disabled, upserts the caller as a customer, opens a `calls` row, and returns the
-room the agent worker should join.
+The webhook resolves the business and agent by matching the dialled number
+against `phone_numbers` (falling back to `businesses.phone`), refuses the call
+when the agent is disabled, upserts the caller as a customer, opens a `calls`
+row, creates the LiveKit room `call-<CallSid>` with the business metadata the
+agent reads, and returns that room name. Your SIP dispatch rule must route the
+caller into that same room. Repeated webhooks for the same `CallSid` return the
+existing call.
 
 ## Environment variables
 
@@ -31,8 +34,11 @@ EXOTEL_CALLER_ID=          # the Exophone / virtual number in E.164
 ```
 
 Set on the agent worker (`services/agent/.env`): `LIVEKIT_*`,
-`OPENAI_API_KEY` (or `GOOGLE_API_KEY`), `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, and `DEFAULT_BUSINESS_ID` for browser test calls.
+`OPENAI_API_KEY` (or `GOOGLE_API_KEY`), `DATABASE_URL`, and optionally
+`DEFAULT_BUSINESS_ID` as a fallback when a room has no business metadata.
+
+For outbound calls, set `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` on the web app (or store
+an `outbound_trunk_id` on the phone number you call from).
 
 ## Steps to go live
 

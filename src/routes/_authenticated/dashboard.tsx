@@ -1,10 +1,11 @@
-import { createFileRoute, Outlet, Link } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/dashboard/Shell";
+import { provisionWorkspace } from "@/lib/business/provision.functions";
 import { useBusiness } from "@/lib/business/useBusiness";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -26,26 +27,13 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   ),
 });
 
-async function fetchProvisionWorkspace() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`/api/business/provision`, {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session?.access_token}` 
-    },
-    body: JSON.stringify({ companyName: "My Workspace" }) // Simple default since UI doesn't collect name yet
-  });
-  if (!res.ok) throw new Error("Failed to provision workspace");
-  return res.json();
-}
-
 function DashboardLayout() {
   const { data, isLoading } = useBusiness();
   const queryClient = useQueryClient();
+  const provision = useServerFn(provisionWorkspace);
 
   const create = useMutation({
-    mutationFn: () => fetchProvisionWorkspace(),
+    mutationFn: () => provision({ data: {} }),
     onSuccess: () => {
       toast.success("Workspace ready.");
       void queryClient.invalidateQueries({ queryKey: ["business-context"] });

@@ -56,7 +56,7 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  { num: "01", title: "Connect", desc: "Sign up, connect your Supabase backend, and provision a phone number." },
+  { num: "01", title: "Connect", desc: "Sign up, create your workspace, and provision a phone number." },
   { num: "02", title: "Configure", desc: "Build your agent with prompts, voice, language, and business knowledge." },
   { num: "03", title: "Go Live", desc: "Publish your agent. Calls are answered instantly, 24/7, in any language." },
 ];

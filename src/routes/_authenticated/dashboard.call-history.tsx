@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
 import { formatDateTime, formatDuration, useBusiness } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
+import { getCallDetail, listCalls } from "@/lib/voice/calls.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/call-history")({
   component: CallsPage,
@@ -15,41 +16,20 @@ function CallsPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
   const [selected, setSelected] = useState<string | null>(null);
+  const fetchCalls = useServerFn(listCalls);
+  const fetchDetail = useServerFn(getCallDetail);
 
   const calls = useQuery({
     queryKey: ["calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("calls")
-        .select("*, customers(name, phone)")
-        .eq("business_id", businessId!)
-        .order("started_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchCalls({ data: { businessId: businessId!, scope: "recent" } }),
   });
 
   const detail = useQuery({
     queryKey: ["call-detail", selected],
     enabled: Boolean(selected),
-    queryFn: async () => {
-      const [transcripts, events] = await Promise.all([
-        supabase
-          .from("call_transcripts")
-          .select("id, speaker, text, timestamp")
-          .eq("call_id", selected!)
-          .order("timestamp", { ascending: true }),
-        supabase
-          .from("call_events")
-          .select("id, event_type, event_data, created_at")
-          .eq("call_id", selected!)
-          .order("created_at", { ascending: true }),
-      ]);
-      return { transcripts: transcripts.data ?? [], events: events.data ?? [] };
-    },
+    queryFn: () => fetchDetail({ data: { callId: selected! } }),
   });
 
   const current = calls.data?.find((c) => c.id === selected) ?? null;
@@ -78,15 +58,15 @@ function CallsPage() {
                   >
                     <div className="min-w-0">
                       <p className="text-[0.92rem] text-ink">
-                        {call.customers?.name ?? call.caller_number ?? "Unknown caller"}
+                        {call.customerName ?? call.callerNumber ?? "Web test call"}
                       </p>
                       <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                        {formatDateTime(call.started_at)} · {formatDuration(call.duration_seconds)} ·{" "}
+                        {formatDateTime(call.startedAt)} · {formatDuration(call.durationSeconds)} ·{" "}
                         {call.language?.toUpperCase() ?? "—"}
                       </p>
                     </div>
-                    <Pill tone={call.escalation_required ? "warn" : call.status === "completed" ? "good" : "neutral"}>
-                      {call.escalation_required ? "Escalated" : call.status}
+                    <Pill tone={call.escalationRequired ? "warn" : call.status === "completed" ? "good" : "neutral"}>
+                      {call.escalationRequired ? "Escalated" : call.status}
                     </Pill>
                   </button>
                 </li>
@@ -105,18 +85,18 @@ function CallsPage() {
                   {current.direction} · {current.provider}
                 </p>
                 <h2 className="font-display mt-2 text-[1.25rem] tracking-tight text-ink">
-                  {current.customers?.name ?? current.caller_number ?? "Unknown caller"}
+                  {current.customerName ?? current.callerNumber ?? "Web test call"}
                 </h2>
                 <p className="mt-1 text-[0.82rem] text-muted-foreground">
-                  {formatDateTime(current.started_at)} · {formatDuration(current.duration_seconds)}
+                  {formatDateTime(current.startedAt)} · {formatDuration(current.durationSeconds)}
                   {current.intent ? ` · ${current.intent}` : ""}
                 </p>
                 {current.summary ? (
                   <p className="mt-3 text-[0.9rem] text-ink">{current.summary}</p>
                 ) : null}
-                {current.tools_used?.length ? (
+                {current.toolsUsed.length ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {current.tools_used.map((tool) => (
+                    {current.toolsUsed.map((tool) => (
                       <Pill key={tool}>{tool}</Pill>
                     ))}
                   </div>
@@ -143,7 +123,7 @@ function CallsPage() {
                     <ul className="mt-2 space-y-1.5">
                       {detail.data.events.map((event) => (
                         <li key={event.id} className="text-[0.82rem] text-muted-foreground">
-                          {formatDateTime(event.created_at)} — {event.event_type}
+                          {formatDateTime(event.createdAt)} — {event.eventType}
                         </li>
                       ))}
                     </ul>

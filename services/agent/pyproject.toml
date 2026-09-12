@@ -6,6 +6,10 @@ requires-python = ">=3.11"
 dependencies = [
   "livekit-agents[openai]~=1.0",
   "python-dotenv>=1.0.1",
+  "asyncpg>=0.29",
+  # IANA timezone database: Windows and slim Linux images have none, and the
+  # agent needs the business's timezone to say what "tomorrow" means.
+  "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]

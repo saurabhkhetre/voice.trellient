@@ -15,6 +15,12 @@ PROVIDERS: dict[str, type[RealtimeModelProvider]] = {
     GeminiLiveProvider.name: GeminiLiveProvider,
 }
 
+# Short names older dashboard builds saved to agent_configs.model_provider.
+ALIASES: dict[str, str] = {
+    "openai": OpenAIRealtimeProvider.name,
+    "gemini": GeminiLiveProvider.name,
+}
+
 
 def build_provider(infra: InfraConfig, provider_name: str | None = None) -> RealtimeModelProvider:
     """Resolves a provider name to a provider instance.
@@ -23,6 +29,7 @@ def build_provider(infra: InfraConfig, provider_name: str | None = None) -> Real
     Otherwise fall back to infra.default_provider (from env REALTIME_PROVIDER).
     """
     name = provider_name or infra.default_provider
+    name = ALIASES.get(name, name)
     provider_cls = PROVIDERS.get(name)
     if provider_cls is None:
         raise ProviderNotConfigured(

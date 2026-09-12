@@ -1,12 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Phone, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
 import { useBusiness } from "@/lib/business/useBusiness";
+import {
+  addPhoneNumber,
+  deletePhoneNumber,
+  listPhoneNumbers,
+  updatePhoneNumber,
+} from "@/lib/telephony/phone-numbers.functions";
+import { listAgentConfigs } from "@/lib/voice/agent-configs.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/phone-numbers")({
   component: PhoneNumbersPage,
@@ -19,6 +26,11 @@ function PhoneNumbersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newNumber, setNewNumber] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const fetchNumbers = useServerFn(listPhoneNumbers);
+  const fetchAgents = useServerFn(listAgentConfigs);
+  const addNumber = useServerFn(addPhoneNumber);
+  const updateNumber = useServerFn(updatePhoneNumber);
+  const removeNumber = useServerFn(deletePhoneNumber);
 
   const queryKey = ["phone-numbers", businessId];
 
@@ -26,45 +38,21 @@ function PhoneNumbersPage() {
     queryKey,
     enabled: Boolean(businessId),
     staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("phone_numbers")
-        .select("id, phone_number, label, provider, agent_config_id, inbound_enabled, active, created_at")
-        .eq("business_id", businessId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchNumbers({ data: { businessId: businessId! } }),
   });
 
   const agents = useQuery({
-    queryKey: ["agents-list", businessId],
+    queryKey: ["agent-configs", businessId],
     enabled: Boolean(businessId),
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agent_configs")
-        .select("id, name")
-        .eq("business_id", businessId!)
-        .order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchAgents({ data: { businessId: businessId! } }),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey });
 
   const addMutation = useMutation({
-    mutationFn: async () => {
-      const trimmed = newNumber.trim();
-      if (!/^\+?[0-9\s-]{6,20}$/.test(trimmed)) throw new Error("Enter a valid phone number.");
-      const { error } = await supabase.from("phone_numbers").insert({
-        business_id: businessId!,
-        phone_number: trimmed,
-        label: newLabel.trim() || null,
-      });
-      if (error) throw error;
-    },
+    mutationFn: () =>
+      addNumber({ data: { businessId: businessId!, phoneNumber: newNumber, label: newLabel.trim() || null } }),
     onSuccess: () => {
       toast.success("Phone number added. Configure your telephony provider to point at your Trellient webhook.");
       setNewNumber("");
@@ -76,19 +64,14 @@ function PhoneNumbersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: { agent_config_id?: string | null; active?: boolean } }) => {
-      const { error } = await supabase.from("phone_numbers").update(patch).eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: ({ id, patch }: { id: string; patch: { agentConfigId?: string | null; active?: boolean } }) =>
+      updateNumber({ data: { phoneNumberId: id, ...patch } }),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
 
   const removeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("phone_numbers").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => removeNumber({ data: { phoneNumberId: id } }),
     onSuccess: () => {
       toast.success("Phone number removed.");
       invalidate();
@@ -168,7 +151,7 @@ function PhoneNumbersPage() {
                 <div className="flex items-center gap-3">
                   <Phone className="size-4 shrink-0 text-brass" />
                   <div>
-                    <p className="font-mono text-[0.92rem] font-medium text-ink">{num.phone_number}</p>
+                    <p className="font-mono text-[0.92rem] font-medium text-ink">{num.phoneNumber}</p>
                     <p className="text-[0.78rem] text-muted-foreground">
                       {num.label ?? "Unlabelled"} · {num.provider}
                     </p>
@@ -177,11 +160,11 @@ function PhoneNumbersPage() {
                 <div className="flex flex-wrap items-center gap-3">
                   {/* Agent assignment */}
                   <select
-                    value={num.agent_config_id ?? ""}
+                    value={num.agentConfigId ?? ""}
                     onChange={(e) =>
                       updateMutation.mutate({
                         id: num.id,
-                        patch: { agent_config_id: e.target.value || null },
+                        patch: { agentConfigId: e.target.value || null },
                       })
                     }
                     className="input-base w-auto py-1.5 text-[0.8rem]"

@@ -81,7 +81,12 @@ export function useVoiceSession() {
         attachListeners(room);
 
         await room.connect(session.serverUrl, session.token);
-        await room.localParticipant.publishTrack(micTrack.mediaStreamTrack);
+        // Name the source explicitly. An unlabelled track is published as
+        // SOURCE_UNKNOWN, and the agent accepts microphone audio only, so it
+        // would greet the caller and then hear nothing they say.
+        await room.localParticipant.publishTrack(micTrack.mediaStreamTrack, {
+          source: Track.Source.Microphone,
+        });
         setMicEnabled(true);
 
         setStatus("waiting-for-agent");
@@ -164,7 +169,12 @@ export function useVoiceSession() {
     const room = roomRef.current;
     if (!room) return;
     const next = !micEnabled;
-    await room.localParticipant.setMicrophoneEnabled(next);
+    // Mute the track we published, rather than setMicrophoneEnabled, which
+    // publishes a second track of its own when the mic was published by hand.
+    for (const pub of room.localParticipant.audioTrackPublications.values()) {
+      if (next) await pub.track?.unmute();
+      else await pub.track?.mute();
+    }
     setMicEnabled(next);
   }, [micEnabled]);
 

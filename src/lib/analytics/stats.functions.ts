@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-import { resolveBusinessId } from "@/lib/supabase/require-business";
+import { getPool, iso } from "@/lib/db/pg.server";
+import { requireAuth } from "@/lib/auth/middleware";
+import { resolveBusinessId } from "@/lib/auth/access";
 
 const timeRangeInput = z.object({
   range: z.enum(["today", "7d", "30d", "90d", "all"]).default("30d"),
@@ -41,111 +42,138 @@ export interface AnalyticsStats {
 
 /** Server-side analytics aggregation — always scoped to the user's workspace. */
 export const getAnalyticsStats = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuth])
   .validator((raw: { range?: string }) => timeRangeInput.parse(raw))
   .handler(async ({ data, context }): Promise<AnalyticsStats> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const businessId = await resolveBusinessId(context.supabase, context.userId);
-
-    let query = supabaseAdmin
-      .from("calls")
-      .select("id, direction, status, duration_seconds, intent, escalation_required")
-      .eq("business_id", businessId);
-
+    const businessId = await resolveBusinessId(context.userId);
     const since = rangeToDate(data.range);
-    if (since) {
-      query = query.gte("started_at", since.toISOString());
-    }
+    const pool = getPool();
 
-    const { data: calls, error } = await query;
-    if (error) throw new Error(error.message);
-    if (!calls || calls.length === 0) {
-      return {
-        totalCalls: 0, answeredCalls: 0, missedCalls: 0, failedCalls: 0,
-        totalMinutes: 0, avgDuration: 0, escalationCount: 0,
-        escalationRate: 0, containmentRate: 100,
-        topIntents: [], callsByDirection: { inbound: 0, outbound: 0 },
-        callsByStatus: {},
-      };
-    }
+    const [groups, intents] = await Promise.all([
+      pool.query<{ status: string; direction: string; calls: number; seconds: number; escalated: number }>(
+        `SELECT status, direction,
+                COUNT(*)::int AS calls,
+                COALESCE(SUM(duration_seconds), 0)::int AS seconds,
+                COUNT(*) FILTER (WHERE escalation_required)::int AS escalated
+         FROM calls
+         WHERE business_id = $1 AND ($2::timestamptz IS NULL OR started_at >= $2)
+         GROUP BY status, direction`,
+        [businessId, since],
+      ),
+      pool.query<{ intent: string; count: number }>(
+        `SELECT intent, COUNT(*)::int AS count
+         FROM calls
+         WHERE business_id = $1 AND intent IS NOT NULL AND intent <> ''
+           AND ($2::timestamptz IS NULL OR started_at >= $2)
+         GROUP BY intent
+         ORDER BY count DESC
+         LIMIT 10`,
+        [businessId, since],
+      ),
+    ]);
 
-    const totalCalls = calls.length;
-    const answeredCalls = calls.filter((c) => c.status === "completed").length;
-    const missedCalls = calls.filter((c) => c.status === "missed").length;
-    const failedCalls = calls.filter((c) => c.status === "failed").length;
-    const totalSeconds = calls.reduce((sum, c) => sum + (c.duration_seconds || 0), 0);
-    const totalMinutes = Math.round(totalSeconds / 60 * 10) / 10;
-    const avgDuration = answeredCalls > 0 ? Math.round(totalSeconds / answeredCalls) : 0;
-    const escalationCount = calls.filter((c) => c.escalation_required).length;
-    const escalationRate = totalCalls > 0 ? Math.round((escalationCount / totalCalls) * 100) : 0;
-    const containmentRate = totalCalls > 0 ? 100 - escalationRate : 100;
-
-    // Top intents
-    const intentMap: Record<string, number> = {};
-    for (const c of calls) {
-      if (c.intent) {
-        intentMap[c.intent] = (intentMap[c.intent] || 0) + 1;
+    const callsByStatus: Record<string, number> = {};
+    const callsByDirection = { inbound: 0, outbound: 0 };
+    let totalCalls = 0;
+    let totalSeconds = 0;
+    let escalationCount = 0;
+    for (const group of groups.rows) {
+      totalCalls += group.calls;
+      totalSeconds += group.seconds;
+      escalationCount += group.escalated;
+      callsByStatus[group.status] = (callsByStatus[group.status] ?? 0) + group.calls;
+      if (group.direction === "inbound" || group.direction === "outbound") {
+        callsByDirection[group.direction] += group.calls;
       }
     }
-    const topIntents = Object.entries(intentMap)
-      .map(([intent, count]) => ({ intent, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
 
-    // By direction
-    const inbound = calls.filter((c) => c.direction === "inbound").length;
-    const outbound = calls.filter((c) => c.direction === "outbound").length;
-
-    // By status
-    const callsByStatus: Record<string, number> = {};
-    for (const c of calls) {
-      callsByStatus[c.status] = (callsByStatus[c.status] || 0) + 1;
-    }
+    const answeredCalls = callsByStatus["completed"] ?? 0;
+    const escalationRate = totalCalls > 0 ? Math.round((escalationCount / totalCalls) * 100) : 0;
 
     return {
-      totalCalls, answeredCalls, missedCalls, failedCalls,
-      totalMinutes, avgDuration, escalationCount, escalationRate, containmentRate,
-      topIntents, callsByDirection: { inbound, outbound }, callsByStatus,
+      totalCalls,
+      answeredCalls,
+      missedCalls: callsByStatus["missed"] ?? 0,
+      failedCalls: callsByStatus["failed"] ?? 0,
+      totalMinutes: Math.round((totalSeconds / 60) * 10) / 10,
+      avgDuration: answeredCalls > 0 ? Math.round(totalSeconds / answeredCalls) : 0,
+      escalationCount,
+      escalationRate,
+      containmentRate: totalCalls > 0 ? 100 - escalationRate : 100,
+      topIntents: intents.rows,
+      callsByDirection,
+      callsByStatus,
     };
   });
 
-/** Dashboard home stats — lighter query, just counts and recent. */
+export interface DashboardStats {
+  callsToday: number;
+  activeCalls: number;
+  activeAgents: number;
+  openEscalations: number;
+}
+
+/** Dashboard home stats — lighter query, just counts. */
 export const getDashboardStats = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const businessId = await resolveBusinessId(context.supabase, context.userId);
+  .middleware([requireAuth])
+  .handler(async ({ context }): Promise<DashboardStats> => {
+    const businessId = await resolveBusinessId(context.userId);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [callsToday, activeCalls, agents, escalations] = await Promise.all([
-      supabaseAdmin
-        .from("calls")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .gte("started_at", today.toISOString()),
-      supabaseAdmin
-        .from("calls")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .in("status", ["ringing", "in_progress"]),
-      supabaseAdmin
-        .from("agent_configs")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .eq("enabled", true),
-      supabaseAdmin
-        .from("escalations")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId)
-        .eq("status", "open"),
-    ]);
+    const { rows } = await getPool().query<{
+      calls_today: number;
+      active_calls: number;
+      active_agents: number;
+      open_escalations: number;
+    }>(
+      `SELECT
+         (SELECT COUNT(*) FROM calls WHERE business_id = $1 AND started_at >= $2)::int AS calls_today,
+         (SELECT COUNT(*) FROM calls WHERE business_id = $1 AND status IN ('ringing', 'in_progress'))::int AS active_calls,
+         (SELECT COUNT(*) FROM agent_configs WHERE business_id = $1 AND enabled)::int AS active_agents,
+         (SELECT COUNT(*) FROM escalations WHERE business_id = $1 AND status = 'open')::int AS open_escalations`,
+      [businessId, today],
+    );
+    const row = rows[0];
 
     return {
-      callsToday: callsToday.count ?? 0,
-      activeCalls: activeCalls.count ?? 0,
-      activeAgents: agents.count ?? 0,
-      openEscalations: escalations.count ?? 0,
+      callsToday: row?.calls_today ?? 0,
+      activeCalls: row?.active_calls ?? 0,
+      activeAgents: row?.active_agents ?? 0,
+      openEscalations: row?.open_escalations ?? 0,
     };
+  });
+
+export interface RecentCall {
+  id: string;
+  startedAt: string | null;
+  durationSeconds: number | null;
+  callerNumber: string | null;
+  status: string;
+  customerName: string | null;
+}
+
+/** The five most recent calls in the user's workspace. */
+export const getRecentCalls = createServerFn({ method: "GET" })
+  .middleware([requireAuth])
+  .handler(async ({ context }): Promise<RecentCall[]> => {
+    const businessId = await resolveBusinessId(context.userId);
+    const { rows } = await getPool().query(
+      `SELECT c.id, c.started_at, c.duration_seconds, c.caller_number, c.status, cu.name AS customer_name
+       FROM calls c
+       LEFT JOIN customers cu ON cu.id = c.customer_id
+       WHERE c.business_id = $1
+       ORDER BY c.started_at DESC
+       LIMIT 5`,
+      [businessId],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      startedAt: iso(row.started_at),
+      durationSeconds: row.duration_seconds,
+      callerNumber: row.caller_number,
+      status: row.status,
+      customerName: row.customer_name,
+    }));
   });

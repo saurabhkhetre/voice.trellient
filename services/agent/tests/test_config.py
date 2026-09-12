@@ -1,6 +1,7 @@
 import pytest
 
-from voice_agent.config import AgentConfig, ConfigError, load_config
+from voice_agent.config import ConfigError, InfraConfig, load_config
+from voice_agent.providers import ProviderNotConfigured, build_provider
 
 BASE_ENV = {
     "LIVEKIT_URL": "wss://example.livekit.cloud",
@@ -12,8 +13,8 @@ BASE_ENV = {
 
 def test_load_config_valid() -> None:
     config = load_config(dict(BASE_ENV))
-    assert isinstance(config, AgentConfig)
-    assert config.provider == "openai_realtime"
+    assert isinstance(config, InfraConfig)
+    assert config.default_provider == "openai_realtime"
     assert config.provider_keys["openai"] == "sk-test-123"
 
 
@@ -32,9 +33,11 @@ def test_url_scheme_is_validated() -> None:
 
 
 def test_unknown_provider_rejected() -> None:
+    # The provider is chosen per call, so an unknown name is rejected when the
+    # provider is built rather than when the environment is loaded.
     env = dict(BASE_ENV) | {"REALTIME_PROVIDER": "not-a-provider"}
-    with pytest.raises(ConfigError):
-        load_config(env)
+    with pytest.raises(ProviderNotConfigured):
+        build_provider(load_config(env))
 
 
 def test_redacted_config_never_leaks_secrets() -> None:

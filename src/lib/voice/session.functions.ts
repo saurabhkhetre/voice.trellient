@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-import { requireAgentOwnership } from "@/lib/supabase/require-business";
+import { requireAuth } from "@/lib/auth/middleware";
+import { requireAgentOwnership } from "@/lib/auth/access";
+import { getPool } from "@/lib/db/pg.server";
 
 export type TestCallSession =
   | {
@@ -19,17 +20,13 @@ const input = z.object({ agentConfigId: z.string().uuid() });
 
 /** Mints a short-lived LiveKit join token for a browser test call with one agent. */
 export const createTestCallSession = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAuth])
   .validator((raw: { agentConfigId: string }) => input.parse(raw))
   .handler(async ({ data, context }): Promise<TestCallSession> => {
     // --- Ownership check: user must belong to the agent's workspace ---
     let ownership: { businessId: string; agentName: string };
     try {
-      ownership = await requireAgentOwnership(
-        context.supabase,
-        context.userId,
-        data.agentConfigId,
-      );
+      ownership = await requireAgentOwnership(context.userId, data.agentConfigId);
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : "Access denied." };
     }
@@ -64,26 +61,27 @@ export const createTestCallSession = createServerFn({ method: "POST" })
     }
 
     // --- Create call record in DB before minting token ---
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const suffix = Math.random().toString(36).slice(2, 10);
     const roomName = `test-${String(data.agentConfigId).slice(0, 8)}-${suffix}`;
     const identity = `user-${context.userId.slice(0, 8)}-${suffix}`;
 
     let callId: string | undefined;
     try {
-      const { data: callRow, error: callErr } = await supabaseAdmin
-        .from("calls")
-        .insert({
-          business_id: ownership.businessId,
-          agent_config_id: data.agentConfigId,
-          provider: "browser",
-          provider_call_id: roomName,
-          direction: "inbound" as const,
-          status: "ringing" as const,
-        })
-        .select("id")
-        .single();
-      if (!callErr && callRow) callId = callRow.id;
+      const pool = getPool();
+      // Close earlier test calls the agent never joined, so they stop counting as active.
+      await pool.query(
+        `UPDATE calls SET status = 'missed', ended_at = now()
+         WHERE business_id = $1 AND provider = 'browser' AND status = 'ringing'
+           AND started_at < now() - interval '2 minutes'`,
+        [ownership.businessId],
+      );
+      const { rows } = await pool.query<{ id: string }>(
+        `INSERT INTO calls (business_id, agent_config_id, provider, provider_call_id, room_name, direction, status)
+         VALUES ($1, $2, 'browser', $3, $3, 'inbound', 'ringing')
+         RETURNING id`,
+        [ownership.businessId, data.agentConfigId, roomName],
+      );
+      callId = rows[0]?.id;
     } catch {
       // Non-fatal: call record creation failing shouldn't block the test call
     }

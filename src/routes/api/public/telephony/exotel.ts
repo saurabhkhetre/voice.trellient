@@ -29,101 +29,149 @@ export const Route = createFileRoute("/api/public/telephony/exotel")({
         const destination = inbound.destinationNumber;
         if (!destination) return json({ error: "Missing destination number" }, 400);
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { getPool } = await import("@/lib/db/pg.server");
+        const pool = getPool();
 
-        // Look up the dialed number in phone_numbers — this is the source of
-        // truth for agent assignment and business ownership.
-        const { data: phoneRow } = await supabaseAdmin
-          .from("phone_numbers")
-          .select("id, business_id, agent_config_id, active")
-          .eq("phone_number", destination)
-          .eq("active", true)
-          .maybeSingle();
-
-        if (!phoneRow) {
-          // Fallback: try matching on businesses.phone for backwards compatibility
-          const { data: business } = await supabaseAdmin
-            .from("businesses")
-            .select("id")
-            .eq("phone", destination)
-            .maybeSingle();
-          if (!business) return json({ error: "Unknown destination number" }, 404);
-          // Legacy path — no agent assignment from phone_numbers
-          var businessId = business.id;
-          var agentConfigId: string | null = null;
-        } else {
-          var businessId = phoneRow.business_id;
-          var agentConfigId = phoneRow.agent_config_id;
+        // Exotel retries webhooks; answer a repeat with the call already opened.
+        const { rows: existing } = await pool.query<{
+          id: string;
+          business_id: string;
+          agent_config_id: string | null;
+          room_name: string | null;
+        }>(
+          `SELECT id, business_id, agent_config_id, room_name
+           FROM calls
+           WHERE provider = $1 AND provider_call_id = $2
+           LIMIT 1`,
+          [provider.name, inbound.providerCallId],
+        );
+        const repeat = existing[0];
+        if (repeat) {
+          return json({
+            action: "connect",
+            room: repeat.room_name ?? inbound.roomName,
+            call_id: repeat.id,
+            business_id: repeat.business_id,
+            agent_config_id: repeat.agent_config_id,
+          });
         }
 
-        // If no agent assigned via phone number, fall back to the first enabled agent
-        if (!agentConfigId) {
-          const { data: config } = await supabaseAdmin
-            .from("agent_configs")
-            .select("id, enabled")
-            .eq("business_id", businessId)
-            .eq("enabled", true)
-            .limit(1)
-            .maybeSingle();
-
-          if (!config) {
-            return json({ action: "reject", reason: "no_active_agent" });
-          }
-          agentConfigId = config.id;
+        // phone_numbers is the source of truth for agent assignment and
+        // business ownership; businesses.phone is the legacy fallback.
+        let businessId: string;
+        let agentConfigId: string | null = null;
+        let phoneNumberId: string | null = null;
+        const { rows: numbers } = await pool.query<{
+          id: string;
+          business_id: string;
+          agent_config_id: string | null;
+        }>(
+          `SELECT id, business_id, agent_config_id
+           FROM phone_numbers
+           WHERE phone_number = $1 AND active
+           LIMIT 1`,
+          [destination],
+        );
+        const number = numbers[0];
+        if (number) {
+          businessId = number.business_id;
+          agentConfigId = number.agent_config_id;
+          phoneNumberId = number.id;
         } else {
-          // Verify the assigned agent is still enabled
-          const { data: config } = await supabaseAdmin
-            .from("agent_configs")
-            .select("id, enabled")
-            .eq("id", agentConfigId)
-            .maybeSingle();
+          const { rows: businesses } = await pool.query<{ id: string }>(
+            `SELECT id FROM businesses WHERE phone = $1 LIMIT 1`,
+            [destination],
+          );
+          const business = businesses[0];
+          if (!business) return json({ error: "Unknown destination number" }, 404);
+          businessId = business.id;
+        }
 
-          if (config && !config.enabled) {
+        // Verify the assigned agent is still enabled.
+        if (agentConfigId) {
+          const { rows } = await pool.query<{ enabled: boolean }>(
+            `SELECT enabled FROM agent_configs WHERE id = $1`,
+            [agentConfigId],
+          );
+          const assigned = rows[0];
+          if (assigned && !assigned.enabled) {
             return json({ action: "reject", reason: "agent_disabled" });
           }
+          if (!assigned) agentConfigId = null;
+        }
+
+        // If no agent is assigned to the number, fall back to the first enabled agent.
+        if (!agentConfigId) {
+          const { rows } = await pool.query<{ id: string }>(
+            `SELECT id FROM agent_configs
+             WHERE business_id = $1 AND enabled
+             ORDER BY created_at ASC
+             LIMIT 1`,
+            [businessId],
+          );
+          const fallback = rows[0];
+          if (!fallback) return json({ action: "reject", reason: "no_active_agent" });
+          agentConfigId = fallback.id;
         }
 
         let customerId: string | null = null;
         if (inbound.callerNumber) {
-          const { data: existing } = await supabaseAdmin
-            .from("customers")
-            .select("id")
-            .eq("business_id", businessId)
-            .eq("phone", inbound.callerNumber)
-            .maybeSingle();
-          if (existing) {
-            customerId = existing.id;
-          } else {
-            const { data: created } = await supabaseAdmin
-              .from("customers")
-              .insert({ business_id: businessId, phone: inbound.callerNumber })
-              .select("id")
-              .single();
-            customerId = created?.id ?? null;
-          }
+          const { rows } = await pool.query<{ id: string }>(
+            `INSERT INTO customers (business_id, phone)
+             VALUES ($1, $2)
+             ON CONFLICT (business_id, phone) DO UPDATE SET phone = EXCLUDED.phone
+             RETURNING id`,
+            [businessId, inbound.callerNumber],
+          );
+          customerId = rows[0]?.id ?? null;
         }
 
-        const { data: call, error } = await supabaseAdmin
-          .from("calls")
-          .insert({
+        let callId: string;
+        try {
+          const { rows } = await pool.query<{ id: string }>(
+            `INSERT INTO calls
+               (business_id, customer_id, agent_config_id, phone_number_id, provider, provider_call_id,
+                room_name, direction, caller_number, destination_number, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'inbound', $8, $9, 'in_progress')
+             RETURNING id`,
+            [
+              businessId,
+              customerId,
+              agentConfigId,
+              phoneNumberId,
+              provider.name,
+              inbound.providerCallId,
+              inbound.roomName,
+              inbound.callerNumber,
+              destination,
+            ],
+          );
+          callId = rows[0]!.id;
+        } catch {
+          return json({ error: "Could not record the call" }, 500);
+        }
+
+        // The agent reads business context from room metadata, so create the
+        // room up front. Best effort: the LiveKit SIP dispatch rule must route
+        // the caller into this same room name.
+        try {
+          const { createRoom } = await import("@/lib/livekit/sip");
+          await createRoom(inbound.roomName, {
             business_id: businessId,
-            customer_id: customerId,
             agent_config_id: agentConfigId,
-            provider: provider.name,
-            provider_call_id: inbound.providerCallId,
-            direction: "inbound",
+            call_id: callId,
             caller_number: inbound.callerNumber,
-            destination_number: destination,
-            status: "in_progress",
-          })
-          .select("id")
-          .single();
-        if (error) return json({ error: "Could not record the call" }, 500);
+            provider: provider.name,
+            mode: "inbound",
+          });
+        } catch {
+          // LiveKit not configured, or the room already exists — the call can still connect.
+        }
 
         return json({
           action: "connect",
           room: inbound.roomName,
-          call_id: call.id,
+          call_id: callId,
           business_id: businessId,
           agent_config_id: agentConfigId,
         });

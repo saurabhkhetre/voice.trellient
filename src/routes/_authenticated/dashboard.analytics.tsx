@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
 import { EmptyState, PageHeader, Panel, StatCard } from "@/components/dashboard/Shell";
 import { formatDuration } from "@/lib/business/useBusiness";
-import type { AnalyticsStats } from "@/lib/analytics/stats.functions";
-import { supabase } from "@/lib/supabase/client";
+import { getAnalyticsStats, type AnalyticsStats } from "@/lib/analytics/stats.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/analytics")({
   component: AnalyticsPage,
@@ -21,25 +21,17 @@ const TIME_RANGES = [
 
 type RangeValue = (typeof TIME_RANGES)[number]["value"];
 
-async function fetchAnalyticsStats(range: string) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`/api/stats/analytics?range=${range}`, {
-    headers: { Authorization: `Bearer ${session?.access_token}` }
-  });
-  if (!res.ok) throw new Error("Failed to fetch analytics stats");
-  return res.json() as Promise<AnalyticsStats>;
-}
-
 function AnalyticsPage() {
   const [range, setRange] = useState<RangeValue>("30d");
+  const fetchStats = useServerFn(getAnalyticsStats);
 
   const stats = useQuery({
     queryKey: ["analytics-stats", range],
     staleTime: 5 * 60_000,
-    queryFn: () => fetchAnalyticsStats(range),
+    queryFn: () => fetchStats({ data: { range } }),
   });
 
-  const d = stats.data as AnalyticsStats | undefined;
+  const d: AnalyticsStats | undefined = stats.data;
 
   return (
     <div>

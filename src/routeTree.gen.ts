@@ -19,7 +19,6 @@ import { Route as AuthenticatedDashboardAiQualityRouteImport } from './routes/_a
 import { Route as AuthenticatedDashboardAlertingRouteImport } from './routes/_authenticated/dashboard.alerting'
 import { Route as AuthenticatedDashboardAnalyticsRouteImport } from './routes/_authenticated/dashboard.analytics'
 import { Route as AuthenticatedDashboardBatchCallRouteImport } from './routes/_authenticated/dashboard.batch-call'
-import { Route as AuthenticatedDashboardBillingRouteImport } from './routes/_authenticated/dashboard.billing'
 import { Route as AuthenticatedDashboardCallHistoryRouteImport } from './routes/_authenticated/dashboard.call-history'
 import { Route as AuthenticatedDashboardContactsRouteImport } from './routes/_authenticated/dashboard.contacts'
 import { Route as AuthenticatedDashboardIntegrationsRouteImport } from './routes/_authenticated/dashboard.integrations'
@@ -84,12 +83,6 @@ const AuthenticatedDashboardBatchCallRoute =
     path: '/batch-call',
     getParentRoute: () => AuthenticatedDashboardRoute,
   } as any)
-const AuthenticatedDashboardBillingRoute =
-  AuthenticatedDashboardBillingRouteImport.update({
-    id: '/billing',
-    path: '/billing',
-    getParentRoute: () => AuthenticatedDashboardRoute,
-  } as any)
 const AuthenticatedDashboardCallHistoryRoute =
   AuthenticatedDashboardCallHistoryRouteImport.update({
     id: '/call-history',
@@ -148,7 +141,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/alerting': typeof AuthenticatedDashboardAlertingRoute
   '/dashboard/analytics': typeof AuthenticatedDashboardAnalyticsRoute
   '/dashboard/batch-call': typeof AuthenticatedDashboardBatchCallRoute
-  '/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/dashboard/call-history': typeof AuthenticatedDashboardCallHistoryRoute
   '/dashboard/contacts': typeof AuthenticatedDashboardContactsRoute
   '/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
@@ -167,7 +159,6 @@ export interface FileRoutesByTo {
   '/dashboard/alerting': typeof AuthenticatedDashboardAlertingRoute
   '/dashboard/analytics': typeof AuthenticatedDashboardAnalyticsRoute
   '/dashboard/batch-call': typeof AuthenticatedDashboardBatchCallRoute
-  '/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/dashboard/call-history': typeof AuthenticatedDashboardCallHistoryRoute
   '/dashboard/contacts': typeof AuthenticatedDashboardContactsRoute
   '/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
@@ -189,7 +180,6 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/alerting': typeof AuthenticatedDashboardAlertingRoute
   '/_authenticated/dashboard/analytics': typeof AuthenticatedDashboardAnalyticsRoute
   '/_authenticated/dashboard/batch-call': typeof AuthenticatedDashboardBatchCallRoute
-  '/_authenticated/dashboard/billing': typeof AuthenticatedDashboardBillingRoute
   '/_authenticated/dashboard/call-history': typeof AuthenticatedDashboardCallHistoryRoute
   '/_authenticated/dashboard/contacts': typeof AuthenticatedDashboardContactsRoute
   '/_authenticated/dashboard/integrations': typeof AuthenticatedDashboardIntegrationsRoute
@@ -211,7 +201,6 @@ export interface FileRouteTypes {
     | '/dashboard/alerting'
     | '/dashboard/analytics'
     | '/dashboard/batch-call'
-    | '/dashboard/billing'
     | '/dashboard/call-history'
     | '/dashboard/contacts'
     | '/dashboard/integrations'
@@ -230,7 +219,6 @@ export interface FileRouteTypes {
     | '/dashboard/alerting'
     | '/dashboard/analytics'
     | '/dashboard/batch-call'
-    | '/dashboard/billing'
     | '/dashboard/call-history'
     | '/dashboard/contacts'
     | '/dashboard/integrations'
@@ -251,7 +239,6 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/alerting'
     | '/_authenticated/dashboard/analytics'
     | '/_authenticated/dashboard/batch-call'
-    | '/_authenticated/dashboard/billing'
     | '/_authenticated/dashboard/call-history'
     | '/_authenticated/dashboard/contacts'
     | '/_authenticated/dashboard/integrations'
@@ -342,13 +329,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardBatchCallRouteImport
       parentRoute: typeof AuthenticatedDashboardRoute
     }
-    '/_authenticated/dashboard/billing': {
-      id: '/_authenticated/dashboard/billing'
-      path: '/billing'
-      fullPath: '/dashboard/billing'
-      preLoaderRoute: typeof AuthenticatedDashboardBillingRouteImport
-      parentRoute: typeof AuthenticatedDashboardRoute
-    }
     '/_authenticated/dashboard/call-history': {
       id: '/_authenticated/dashboard/call-history'
       path: '/call-history'
@@ -414,7 +394,6 @@ interface AuthenticatedDashboardRouteChildren {
   AuthenticatedDashboardAlertingRoute: typeof AuthenticatedDashboardAlertingRoute
   AuthenticatedDashboardAnalyticsRoute: typeof AuthenticatedDashboardAnalyticsRoute
   AuthenticatedDashboardBatchCallRoute: typeof AuthenticatedDashboardBatchCallRoute
-  AuthenticatedDashboardBillingRoute: typeof AuthenticatedDashboardBillingRoute
   AuthenticatedDashboardCallHistoryRoute: typeof AuthenticatedDashboardCallHistoryRoute
   AuthenticatedDashboardContactsRoute: typeof AuthenticatedDashboardContactsRoute
   AuthenticatedDashboardIntegrationsRoute: typeof AuthenticatedDashboardIntegrationsRoute
@@ -432,7 +411,6 @@ const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
     AuthenticatedDashboardAlertingRoute: AuthenticatedDashboardAlertingRoute,
     AuthenticatedDashboardAnalyticsRoute: AuthenticatedDashboardAnalyticsRoute,
     AuthenticatedDashboardBatchCallRoute: AuthenticatedDashboardBatchCallRoute,
-    AuthenticatedDashboardBillingRoute: AuthenticatedDashboardBillingRoute,
     AuthenticatedDashboardCallHistoryRoute:
       AuthenticatedDashboardCallHistoryRoute,
     AuthenticatedDashboardContactsRoute: AuthenticatedDashboardContactsRoute,
@@ -472,13 +450,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

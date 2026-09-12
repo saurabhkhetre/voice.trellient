@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { RecordForm, type Row } from "@/components/dashboard/CrudSection";
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/dashboard/Shell";
-import { supabase } from "@/integrations/supabase/client";
+import { listTeam, updateBusiness } from "@/lib/business/business.functions";
 import { useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/settings")({
@@ -15,27 +16,17 @@ function SettingsPage() {
   const { data: ctx } = useBusiness();
   const queryClient = useQueryClient();
   const businessId = ctx?.business.id;
+  const fetchTeam = useServerFn(listTeam);
+  const saveBusiness = useServerFn(updateBusiness);
 
   const team = useQuery({
     queryKey: ["team", businessId],
     enabled: Boolean(businessId),
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("business_users")
-        .select("id, role, auth_user_id, created_at")
-        .eq("business_id", businessId!);
-      return data ?? [];
-    },
+    queryFn: () => fetchTeam({ data: { businessId: businessId! } }),
   });
 
   const save = useMutation({
-    mutationFn: async (values: Row) => {
-      const { error } = await supabase
-        .from("businesses")
-        .update(values as never)
-        .eq("id", businessId!);
-      if (error) throw error;
-    },
+    mutationFn: (values: Row) => saveBusiness({ data: { businessId: businessId!, values } }),
     onSuccess: () => {
       toast.success("Business details saved.");
       void queryClient.invalidateQueries({ queryKey: ["business-context"] });
@@ -89,7 +80,7 @@ function SettingsPage() {
             {team.data!.map((member) => (
               <li key={member.id} className="flex items-center justify-between px-5 py-4">
                 <span className="text-[0.88rem] text-ink">
-                  {member.auth_user_id === ctx.userId ? `${ctx.email} (you)` : member.auth_user_id}
+                  {member.authUserId === ctx.userId ? `${ctx.email ?? "Your account"} (you)` : member.authUserId}
                 </span>
                 <Pill tone={member.role === "owner" ? "good" : "neutral"}>{member.role}</Pill>
               </li>

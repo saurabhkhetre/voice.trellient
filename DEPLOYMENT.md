@@ -18,7 +18,7 @@ Secrets), or on the command line:
 lk agent update-secrets \
   OPENAI_API_KEY=sk-... \
   REALTIME_PROVIDER=openai_realtime \
-  REALTIME_MODEL=gpt-4o-realtime-preview
+  REALTIME_MODEL=gpt-realtime
 ```
 
 `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` are injected by the

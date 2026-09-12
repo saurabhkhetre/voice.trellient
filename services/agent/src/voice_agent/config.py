@@ -32,7 +32,7 @@ class InfraConfig:
 
     # Defaults used when the DB agent_config doesn't specify values
     default_provider: str = "openai_realtime"
-    default_model: str = "gpt-4o-realtime-preview"
+    default_model: str = "gpt-realtime"
     default_voice: str = "alloy"
     default_greeting: str = (
         "Hey, I'm your voice assistant. What would you like to talk about?"
@@ -128,7 +128,7 @@ def load_config(env: dict[str, str] | None = None) -> InfraConfig:
         livekit_api_key=api_key,
         livekit_api_secret=api_secret,
         default_provider=(source.get("REALTIME_PROVIDER") or "openai_realtime").strip(),
-        default_model=(source.get("REALTIME_MODEL") or "gpt-4o-realtime-preview").strip(),
+        default_model=(source.get("REALTIME_MODEL") or "gpt-realtime").strip(),
         default_voice=(source.get("AGENT_VOICE") or "alloy").strip(),
         default_greeting=(
             source.get("AGENT_GREETING")

@@ -54,13 +54,13 @@
 :root {
   --radius: 2px;
 
-  /* monochrome editorial: warm paper, near-black ink, no chroma */
-  --navy: #1c1b1b;
-  --navy-deep: #000000;
+  /* navy on warm paper: deep navy chrome, royal-blue actions, dark navy ink */
+  --navy: #10264a;
+  --navy-deep: #0a1a36;
   --paper: #f7f6f2;
-  --ink: #1c1b1b;
-  --brass: #1c1b1b;
-  --brass-hover: #000000;
+  --ink: #1a2b4c;
+  --brass: #2f64d6;
+  --brass-hover: #1f4fbd;
 
   --background: var(--paper);
   --foreground: var(--ink);
@@ -68,24 +68,24 @@
   --card-foreground: var(--ink);
   --popover: #fdfcfa;
   --popover-foreground: var(--ink);
-  --primary: var(--navy);
-  --primary-foreground: #fdf8f8;
+  --primary: #1f4fbd;
+  --primary-foreground: #ffffff;
   --secondary: #f1edec;
   --secondary-foreground: var(--ink);
   --muted: #f1edec;
   --muted-foreground: #5f5e5e;
-  --accent: #1c1b1b;
-  --accent-foreground: #fdf8f8;
+  --accent: #1f4fbd;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.52 0.18 27.3);
   --destructive-foreground: #fdfcfa;
   --border: #e5e2e1;
   --input: #d6d3d1;
-  --ring: #1c1b1b;
+  --ring: #2f64d6;
 
   --line: #e5e2e1;
   --line-strong: #c8c6c5;
   --onnavy: #fdf8f8;
-  --onnavy-muted: #a8a5a3;
+  --onnavy-muted: #a7b5cf;
 }
 
 @layer base {

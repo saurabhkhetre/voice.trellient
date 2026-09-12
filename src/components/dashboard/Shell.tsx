@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
   Menu,
@@ -10,20 +11,18 @@ import {
   Phone,
   PhoneOutgoing,
   History,
-  MessageSquare,
   Users,
   BarChart3,
   Radio,
   ShieldCheck,
   Bell,
   Puzzle,
-  CreditCard,
   Settings,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { signOut as signOutFn } from "@/lib/auth/auth.functions";
 import { useBusiness } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +49,6 @@ const DASHBOARD_NAV: (NavItem | NavGroup)[] = [
     label: "DATA",
     items: [
       { to: "/dashboard/call-history", label: "Call History", icon: History },
-      { to: "/dashboard/chat-history", label: "Chat History", icon: MessageSquare },
       { to: "/dashboard/contacts", label: "Contacts", icon: Users },
     ],
   },
@@ -67,7 +65,6 @@ const DASHBOARD_NAV: (NavItem | NavGroup)[] = [
     label: "SYSTEM",
     items: [
       { to: "/dashboard/integrations", label: "Integrations", icon: Puzzle },
-      { to: "/dashboard/billing", label: "Billing", icon: CreditCard },
       { to: "/dashboard/settings", label: "Settings", icon: Settings },
     ],
   },
@@ -116,10 +113,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [conductorOpen, setConductorOpen] = useState(false);
 
+  const endSession = useServerFn(signOutFn);
+
   async function signOut() {
+    await endSession();
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
     void navigate({ to: "/auth", replace: true });
   }
 
@@ -143,7 +142,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <p className="truncate text-[0.68rem] text-onnavy-muted">{data?.email ?? ""}</p>
           </div>
 
-          <nav aria-label="Dashboard" className="mt-5 flex-1 space-y-1 overflow-y-auto">
+          <nav
+            aria-label="Dashboard"
+            className="mt-5 flex-1 space-y-1 overflow-y-auto [scrollbar-color:rgb(255_255_255/0.22)_transparent] [scrollbar-width:thin]"
+          >
             {DASHBOARD_NAV.map((entry, i) =>
               isGroup(entry) ? (
                 <div key={entry.label} className={cn(i > 0 && "mt-5")}>

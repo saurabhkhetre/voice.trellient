@@ -1,11 +1,16 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
-import { getCurrentUser } from "@/lib/auth/auth.functions";
+import { apiGet } from "@/lib/api/client";
+import { type CurrentUser } from "@/lib/api/contracts";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const user = await getCurrentUser();
+    // Spring: GET /api/auth/me. 204 means "nobody", which the client surfaces
+    // as undefined — normalise so a signed-out visitor redirects rather than
+    // falling through as a truthy value. Safe to call the browser-only client
+    // here because this route is ssr: false.
+    const user = (await apiGet<CurrentUser | null>("/auth/me")) ?? null;
     if (!user) throw redirect({ to: "/auth" });
     return { user };
   },

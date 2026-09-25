@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
 import { EmptyState, PageHeader, Panel, StatCard } from "@/components/dashboard/Shell";
 import { formatDuration } from "@/lib/business/useBusiness";
-import { getAnalyticsStats, type AnalyticsStats } from "@/lib/analytics/stats.functions";
+import { apiGet } from "@/lib/api/client";
+// Type only. The server function it came from is still in place as a fallback
+// until this page is confirmed on Spring; importing the type keeps the two
+// response shapes checked against each other at compile time.
+import { type AnalyticsStats } from "@/lib/api/contracts";
 
 export const Route = createFileRoute("/_authenticated/dashboard/analytics")({
   component: AnalyticsPage,
@@ -23,12 +26,12 @@ type RangeValue = (typeof TIME_RANGES)[number]["value"];
 
 function AnalyticsPage() {
   const [range, setRange] = useState<RangeValue>("30d");
-  const fetchStats = useServerFn(getAnalyticsStats);
 
   const stats = useQuery({
     queryKey: ["analytics-stats", range],
     staleTime: 5 * 60_000,
-    queryFn: () => fetchStats({ data: { range } }),
+    // Spring: GET /api/stats/analytics (services/api AnalyticsController).
+    queryFn: () => apiGet<AnalyticsStats>("/stats/analytics", { range }),
   });
 
   const d: AnalyticsStats | undefined = stats.data;

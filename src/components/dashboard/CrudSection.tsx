@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { apiDelete, apiGet, apiPost } from "@/lib/api/client";
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyState, Panel } from "@/components/dashboard/Shell";
-import { deleteRecord, listRecords, saveRecord, type RecordTable } from "@/lib/data/records.functions";
+// Type only — the server functions stay in place until these pages are
+// confirmed on Spring.
+import { type RecordTable } from "@/lib/api/contracts";
 import { cn } from "@/lib/utils";
 
 export type FieldType = "text" | "textarea" | "number" | "boolean" | "select";
@@ -59,19 +61,19 @@ export function CrudSection({
   const [editing, setEditing] = useState<Row | null>(null);
   const [creating, setCreating] = useState(false);
   const queryKey = useMemo(() => [table, businessId], [table, businessId]);
-  const fetchRows = useServerFn(listRecords);
-  const saveRow = useServerFn(saveRecord);
-  const removeRow = useServerFn(deleteRecord);
-
   const list = useQuery({
     queryKey,
-    queryFn: (): Promise<Row[]> => fetchRows({ data: { table, businessId } }),
+    // Spring: GET /api/records/{table}?businessId
+    queryFn: (): Promise<Row[]> => apiGet<Row[]>(`/records/${table}`, { businessId }),
   });
 
   const save = useMutation({
+    // Spring: POST /api/records/{table} — insert, or update when id is sent.
     mutationFn: (values: Row) =>
-      saveRow({
-        data: { table, businessId, id: editing?.["id"] ? String(editing["id"]) : undefined, values },
+      apiPost<{ id: string }>(`/records/${table}`, {
+        businessId,
+        id: editing?.["id"] ? String(editing["id"]) : undefined,
+        values,
       }),
     onSuccess: () => {
       toast.success("Saved.");
@@ -83,7 +85,8 @@ export function CrudSection({
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => removeRow({ data: { table, businessId, id } }),
+    // Spring: DELETE /api/records/{table}/{id}?businessId — owner/manager only.
+    mutationFn: (id: string) => apiDelete<void>(`/records/${table}/${id}`, { businessId }),
     onSuccess: () => {
       toast.success("Deleted.");
       void queryClient.invalidateQueries({ queryKey });

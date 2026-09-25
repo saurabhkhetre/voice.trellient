@@ -46,6 +46,50 @@ class BusinessContext:
             self.tools_used.append(tool)
 
 
+# Generic phrasing that means "show me everything", not a specific search
+# term. ILIKE '%products%' finds nothing for the literal word "products"
+# against real catalogue entries (e.g. "Sample Widget"), so a query this
+# broad skips the substring filter and returns the active list instead.
+_BROAD_QUERY_TERMS = frozenset(
+    {
+        "",
+        "any",
+        "anything",
+        "all",
+        "everything",
+        "product",
+        "products",
+        "item",
+        "items",
+        "catalog",
+        "catalogue",
+        "service",
+        "services",
+        "offer",
+        "offers",
+        "offering",
+        "offerings",
+        "option",
+        "options",
+        "menu",
+        "list",
+        "policy",
+        "policies",
+        "rule",
+        "rules",
+        "info",
+        "information",
+        "details",
+        "knowledge",
+    }
+)
+
+
+def _is_broad_query(query: str) -> bool:
+    """True when the caller's phrasing is too generic to substring-match."""
+    return query.strip().lower() in _BROAD_QUERY_TERMS
+
+
 def _parse_date(value: str) -> date_cls:
     return date_cls.fromisoformat(value)
 
@@ -176,29 +220,49 @@ class BusinessClient:
 
     async def product_lookup(self, ctx: BusinessContext, query: str) -> list[dict[str, Any]]:
         ctx.mark("product_lookup")
-        pattern = f"%{query}%"
-        rows = await self.conn.fetch(
-            """SELECT id, name, category, price, currency, stock_status, description
-               FROM products
-               WHERE business_id = $1 AND active
-                 AND (name ILIKE $2 OR category ILIKE $2 OR description ILIKE $2)
-               LIMIT 5""",
-            ctx.business_id,
-            pattern,
-        )
+        if _is_broad_query(query):
+            rows = await self.conn.fetch(
+                """SELECT id, name, category, price, currency, stock_status, description
+                   FROM products
+                   WHERE business_id = $1 AND active
+                   ORDER BY name
+                   LIMIT 10""",
+                ctx.business_id,
+            )
+        else:
+            pattern = f"%{query}%"
+            rows = await self.conn.fetch(
+                """SELECT id, name, category, price, currency, stock_status, description
+                   FROM products
+                   WHERE business_id = $1 AND active
+                     AND (name ILIKE $2 OR category ILIKE $2 OR description ILIKE $2)
+                   LIMIT 5""",
+                ctx.business_id,
+                pattern,
+            )
         return [dict(r) for r in rows]
 
     async def service_lookup(self, ctx: BusinessContext, query: str) -> list[dict[str, Any]]:
         ctx.mark("service_lookup")
-        pattern = f"%{query}%"
-        rows = await self.conn.fetch(
-            """SELECT id, name, base_price, duration_minutes, description
-               FROM services
-               WHERE business_id = $1 AND active AND (name ILIKE $2 OR description ILIKE $2)
-               LIMIT 5""",
-            ctx.business_id,
-            pattern,
-        )
+        if _is_broad_query(query):
+            rows = await self.conn.fetch(
+                """SELECT id, name, base_price, duration_minutes, description
+                   FROM services
+                   WHERE business_id = $1 AND active
+                   ORDER BY name
+                   LIMIT 10""",
+                ctx.business_id,
+            )
+        else:
+            pattern = f"%{query}%"
+            rows = await self.conn.fetch(
+                """SELECT id, name, base_price, duration_minutes, description
+                   FROM services
+                   WHERE business_id = $1 AND active AND (name ILIKE $2 OR description ILIKE $2)
+                   LIMIT 5""",
+                ctx.business_id,
+                pattern,
+            )
         return [dict(r) for r in rows]
 
     async def pricing_lookup(self, ctx: BusinessContext, query: str) -> Any:
@@ -210,29 +274,49 @@ class BusinessClient:
 
     async def policy_lookup(self, ctx: BusinessContext, topic: str) -> list[dict[str, Any]]:
         ctx.mark("policy_lookup")
-        pattern = f"%{topic}%"
-        rows = await self.conn.fetch(
-            """SELECT policy_type, title, content
-               FROM business_policies
-               WHERE business_id = $1 AND active
-                 AND (policy_type ILIKE $2 OR title ILIKE $2 OR content ILIKE $2)
-               LIMIT 3""",
-            ctx.business_id,
-            pattern,
-        )
+        if _is_broad_query(topic):
+            rows = await self.conn.fetch(
+                """SELECT policy_type, title, content
+                   FROM business_policies
+                   WHERE business_id = $1 AND active
+                   ORDER BY policy_type
+                   LIMIT 5""",
+                ctx.business_id,
+            )
+        else:
+            pattern = f"%{topic}%"
+            rows = await self.conn.fetch(
+                """SELECT policy_type, title, content
+                   FROM business_policies
+                   WHERE business_id = $1 AND active
+                     AND (policy_type ILIKE $2 OR title ILIKE $2 OR content ILIKE $2)
+                   LIMIT 3""",
+                ctx.business_id,
+                pattern,
+            )
         return [dict(r) for r in rows]
 
     async def knowledge_lookup(self, ctx: BusinessContext, topic: str) -> list[dict[str, Any]]:
         ctx.mark("knowledge_lookup")
-        pattern = f"%{topic}%"
-        rows = await self.conn.fetch(
-            """SELECT title, content
-               FROM agent_knowledge
-               WHERE business_id = $1 AND active AND (title ILIKE $2 OR content ILIKE $2)
-               LIMIT 3""",
-            ctx.business_id,
-            pattern,
-        )
+        if _is_broad_query(topic):
+            rows = await self.conn.fetch(
+                """SELECT title, content
+                   FROM agent_knowledge
+                   WHERE business_id = $1 AND active
+                   ORDER BY title
+                   LIMIT 5""",
+                ctx.business_id,
+            )
+        else:
+            pattern = f"%{topic}%"
+            rows = await self.conn.fetch(
+                """SELECT title, content
+                   FROM agent_knowledge
+                   WHERE business_id = $1 AND active AND (title ILIKE $2 OR content ILIKE $2)
+                   LIMIT 3""",
+                ctx.business_id,
+                pattern,
+            )
         return [dict(r) for r in rows]
 
     async def appointment_check(self, ctx: BusinessContext, date: str, time: str) -> Any:

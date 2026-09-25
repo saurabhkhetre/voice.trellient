@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { Radio, Phone, Volume2, VolumeX } from "lucide-react";
 import {
   Room,
@@ -13,8 +12,10 @@ import {
 import { PageHeader, Panel, Pill, StatCard } from "@/components/dashboard/Shell";
 import { useBusiness } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
-import { listCalls } from "@/lib/voice/calls.functions";
-import { createCallMonitorSession, type MonitorSession } from "@/lib/voice/monitor.functions";
+import { apiGet, apiPost } from "@/lib/api/client";
+// Types only — the server functions stay until this page is confirmed on
+// Spring, and importing them keeps both response shapes checked in step.
+import { type CallSummary, type MonitorToken } from "@/lib/api/contracts";
 import { TRANSCRIPTION_TOPIC, type TranscriptEntry } from "@/lib/voice/contract";
 
 export const Route = createFileRoute("/_authenticated/dashboard/live-monitoring")({
@@ -35,7 +36,6 @@ type ActiveCall = {
 function LiveMonitoringPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
-  const fetchCalls = useServerFn(listCalls);
 
   const activeCalls = useQuery({
     queryKey: ["live-calls", businessId],
@@ -43,7 +43,11 @@ function LiveMonitoringPage() {
     refetchInterval: 5_000, // poll every 5s for active calls
     staleTime: 3_000,
     queryFn: async () => {
-      const calls = await fetchCalls({ data: { businessId: businessId!, scope: "active" } });
+      // Spring: GET /api/calls?businessId&scope=active
+      const calls = await apiGet<CallSummary[]>("/calls", {
+        businessId: businessId!,
+        scope: "active",
+      });
       return calls.map(
         (call): ActiveCall => ({
           id: call.id,
@@ -185,7 +189,6 @@ function LiveCallRow({
  * Shows real audio waveform and live transcript.
  */
 function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }) {
-  const fetchSession = useServerFn(createCallMonitorSession);
   const roomRef = useRef<Room | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -208,16 +211,14 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
 
     async function connectMonitor() {
       try {
-        const session = await fetchSession({
-          data: { callId: call.id, roomName: call.room_name! },
-        }) as MonitorSession;
+        // Spring: POST /api/voice/monitor — owner/manager only (SECURITY.md
+        // F-02). A non-manager gets 403, which the catch below surfaces.
+        const session = await apiPost<MonitorToken>("/voice/monitor", {
+          callId: call.id,
+          roomName: call.room_name!,
+        });
 
         if (cancelled) return;
-        if (!session.ok) {
-          setMonitorStatus("error");
-          setMonitorError(session.error);
-          return;
-        }
 
         const room = new Room({ adaptiveStream: true });
         roomRef.current = room;
@@ -294,7 +295,7 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
       roomRef.current = null;
       if (room) void room.disconnect();
     };
-  }, [call.id, call.room_name, fetchSession]);
+  }, [call.id, call.room_name]);
 
   // Waveform animation loop
   useEffect(() => {

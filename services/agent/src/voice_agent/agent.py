@@ -141,7 +141,22 @@ class ConversationManager:
 
     async def start(self, ctx: JobContext) -> AgentSession | None:
         started = time.monotonic()
+
+        # Per-phase startup timings. The first call after a worker restart has
+        # been measured at ~8s to first greeting; these show which step owns it.
+        # Process spawn happens before this and is the gap between the
+        # "received job request" and "room.connected" log lines.
+        phases: dict[str, int] = {}
+        mark = started
+
+        def lap(name: str) -> None:
+            nonlocal mark
+            now = time.monotonic()
+            phases[name] = round((now - mark) * 1000)
+            mark = now
+
         business = await self.load_business(ctx)
+        lap("t_business_ms")
 
         if business is None or not business.config:
             # A job can arrive without business metadata — LiveKit redispatches
@@ -169,9 +184,11 @@ class ConversationManager:
                 extra=extra,
                 on_end_call=lambda reason: self._end_call(ctx, reason),
             )
+        lap("t_tools_ms")
 
         # Build provider dynamically from the DB config's model_provider
         provider = build_provider(self.infra, self.call_config.provider)
+        lap("t_provider_ms")
 
         log_event(
             logger,
@@ -181,7 +198,11 @@ class ConversationManager:
             tools=len(tools),
         )
 
-        session = AgentSession(llm=provider.create_model(self.call_config))
+        # Plugin import plus model construction — the suspected cold-start cost.
+        model = provider.create_model(self.call_config)
+        lap("t_model_build_ms")
+
+        session = AgentSession(llm=model)
         self.session = session
         self._attach_listeners(session, ctx)
 
@@ -191,7 +212,16 @@ class ConversationManager:
             # Realtime models handle turn detection and barge-in natively; the
             # session cancels agent audio as soon as the user starts speaking.
             room_input_options=RoomInputOptions(),
+            # Audio recording off: RecorderIO's encode thread builds an
+            # AudioResampler, and that call into livekit_ffi.dll traps the whole
+            # worker (Windows 0x80000003, exit code 3) the moment the first
+            # inbound frame needs resampling — livekit rtc 1.1.17. With
+            # recording_options["audio"] false the recorder is never built, so
+            # the crashing path is unreachable. Traces, logs and transcript
+            # upload are unaffected. Revisit once rtc is upgraded.
+            record={"audio": False},
         )
+        lap("t_session_start_ms")
 
         log_event(
             logger,
@@ -199,6 +229,7 @@ class ConversationManager:
             agent=AGENT_NAME,
             room=ctx.room.name,
             startup_ms=round((time.monotonic() - started) * 1000),
+            **phases,
         )
 
         # Rows created before the agent joined (browser test calls, outbound)

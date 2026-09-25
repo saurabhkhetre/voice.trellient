@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 import { PageHeader, Panel, Pill, StatCard, EmptyState } from "@/components/dashboard/Shell";
 import { useBusiness, formatDateTime, formatDuration } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
-import { listCalls } from "@/lib/voice/calls.functions";
+import { apiGet } from "@/lib/api/client";
+import { type CallSummary } from "@/lib/api/contracts";
 
 export const Route = createFileRoute("/_authenticated/dashboard/ai-quality")({
   component: AIQualityPage,
@@ -62,14 +62,16 @@ function AIQualityPage() {
   const businessId = ctx?.business.id;
   const [selected, setSelected] = useState<string | null>(null);
 
-  const fetchCalls = useServerFn(listCalls);
-
   const callsQuery = useQuery({
     queryKey: ["qa-calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const calls = await fetchCalls({ data: { businessId: businessId!, scope: "finished" } });
+      // Spring: GET /api/calls?businessId&scope=finished
+      const calls = await apiGet<CallSummary[]>("/calls", {
+        businessId: businessId!,
+        scope: "finished",
+      });
       return calls.map(
         (call): CallQA => ({
           id: call.id,

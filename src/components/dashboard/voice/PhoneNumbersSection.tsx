@@ -1,15 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { Phone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  addPhoneNumber,
-  deletePhoneNumber,
-  listPhoneNumbers,
-  updatePhoneNumber,
-} from "@/lib/telephony/phone-numbers.functions";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+// Type only — the server functions stay until this page is confirmed on Spring.
+import { type PhoneNumber } from "@/lib/api/contracts";
 
 /** Assign inbound numbers to agents. */
 export function PhoneNumbersSection({
@@ -25,21 +21,24 @@ export function PhoneNumbersSection({
   const queryKey = ["phone-numbers", businessId];
   const [number, setNumber] = useState("");
   const [label, setLabel] = useState("");
-  const fetchNumbers = useServerFn(listPhoneNumbers);
-  const addNumber = useServerFn(addPhoneNumber);
-  const updateNumber = useServerFn(updatePhoneNumber);
-  const removeNumber = useServerFn(deletePhoneNumber);
 
   const numbers = useQuery({
     queryKey,
-    queryFn: () => fetchNumbers({ data: { businessId } }),
+    // Spring: GET /api/phone-numbers?businessId
+    queryFn: () => apiGet<PhoneNumber[]>("/phone-numbers", { businessId }),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey });
 
   const add = useMutation({
+    // Spring: POST /api/phone-numbers — owner/manager only.
     mutationFn: () =>
-      addNumber({ data: { businessId, agentConfigId: agentId, phoneNumber: number, label: label.trim() || null } }),
+      apiPost<{ id: string }>("/phone-numbers", {
+        businessId,
+        agentConfigId: agentId,
+        phoneNumber: number,
+        label: label.trim() || null,
+      }),
     onSuccess: () => {
       setNumber("");
       setLabel("");
@@ -50,14 +49,16 @@ export function PhoneNumbersSection({
   });
 
   const update = useMutation({
+    // Spring: PATCH /api/phone-numbers/{id}
     mutationFn: ({ id, patch }: { id: string; patch: { agentConfigId?: string | null; active?: boolean } }) =>
-      updateNumber({ data: { phoneNumberId: id, ...patch } }),
+      apiPatch<void>(`/phone-numbers/${id}`, patch),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => removeNumber({ data: { phoneNumberId: id } }),
+    // Spring: DELETE /api/phone-numbers/{id} — owner/manager only.
+    mutationFn: (id: string) => apiDelete<void>(`/phone-numbers/${id}`),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });

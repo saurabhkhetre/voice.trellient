@@ -1,27 +1,20 @@
 package com.trellient.voice.api.services;
 
 import com.trellient.voice.api.models.Business;
-import com.trellient.voice.api.models.BusinessUser;
 import com.trellient.voice.api.repositories.BusinessRepository;
-import com.trellient.voice.api.repositories.BusinessUserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
 public class BusinessService {
 
     private final BusinessRepository businessRepository;
-    private final BusinessUserRepository businessUserRepository;
 
-    public BusinessService(BusinessRepository businessRepository,
-                           BusinessUserRepository businessUserRepository) {
+    public BusinessService(BusinessRepository businessRepository) {
         this.businessRepository = businessRepository;
-        this.businessUserRepository = businessUserRepository;
     }
 
     /**
@@ -35,39 +28,8 @@ public class BusinessService {
                         HttpStatus.NOT_FOUND, "No workspace found for this user."));
     }
 
-    /**
-     * Creates a new business workspace and links the user as owner.
-     * Returns the created business.
-     */
-    @Transactional
-    public Business provisionWorkspace(String userId, String companyName) {
-        UUID authUserId = UUID.fromString(userId);
-
-        // Prevent double-provisioning
-        if (businessUserRepository.existsByAuthUserId(authUserId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "User already has a workspace.");
-        }
-
-        // Create the business
-        Business business = new Business();
-        business.setId(UUID.randomUUID());
-        business.setName(companyName);
-        business.setTimezone("Asia/Kolkata");
-        business.setDefaultLanguage("en");
-        business.setCreatedAt(OffsetDateTime.now());
-        business.setUpdatedAt(OffsetDateTime.now());
-        business = businessRepository.save(business);
-
-        // Link the user as owner via business_users
-        BusinessUser membership = new BusinessUser();
-        membership.setId(UUID.randomUUID());
-        membership.setBusinessId(business.getId());
-        membership.setAuthUserId(authUserId);
-        membership.setRole(BusinessUser.BusinessRole.owner);
-        membership.setCreatedAt(OffsetDateTime.now());
-        businessUserRepository.save(membership);
-
-        return business;
-    }
+    // Provisioning lives in BusinessController, which mirrors the web app's
+    // provision.functions.ts contract (optional name, idempotent, seeds a
+    // starter agent). Keeping a second implementation here invited exactly the
+    // drift this migration exists to remove.
 }

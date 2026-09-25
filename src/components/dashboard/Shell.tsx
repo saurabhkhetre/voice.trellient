@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { lazy, Suspense, useState, type ReactNode } from "react";
 import {
   Menu,
@@ -22,7 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { signOut as signOutFn } from "@/lib/auth/auth.functions";
+import { apiPost } from "@/lib/api/client";
 import { useBusiness } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
 
@@ -113,10 +112,16 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [conductorOpen, setConductorOpen] = useState(false);
 
-  const endSession = useServerFn(signOutFn);
-
   async function signOut() {
-    await endSession();
+    // Spring: POST /api/auth/signout — carries the CSRF header, deletes this
+    // session's row and clears the cookie. Other sessions for the same user are
+    // untouched; ending them all would need SECURITY.md F-05, which is open.
+    try {
+      await apiPost<void>("/auth/signout");
+    } catch {
+      // The session may already be gone server-side. Clear locally regardless,
+      // so a stale cookie can never strand someone on the dashboard.
+    }
     await queryClient.cancelQueries();
     queryClient.clear();
     void navigate({ to: "/auth", replace: true });

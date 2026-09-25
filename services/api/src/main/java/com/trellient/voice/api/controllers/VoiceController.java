@@ -1,5 +1,6 @@
 package com.trellient.voice.api.controllers;
 
+import com.trellient.voice.api.access.AccessService;
 import com.trellient.voice.api.models.AgentConfig;
 import com.trellient.voice.api.models.Business;
 import com.trellient.voice.api.models.Call;
@@ -10,6 +11,7 @@ import com.trellient.voice.api.services.BusinessService;
 import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
+import io.livekit.server.CanUpdateOwnMetadata;
 import io.livekit.server.CanSubscribe;
 import io.livekit.server.Hidden;
 import io.livekit.server.RoomJoin;
@@ -18,6 +20,7 @@ import io.livekit.server.RoomServiceClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,8 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
+import java.util.Date;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -41,6 +47,11 @@ public class VoiceController {
     private final BusinessService businessService;
     private final CallRepository callRepository;
     private final AgentConfigRepository agentConfigRepository;
+    private final AccessService access;
+    private final JdbcTemplate jdbc;
+
+    /** Matches the 15-minute ttl the web app minted test-call tokens with. */
+    private static final Duration TEST_CALL_TTL = Duration.ofMinutes(15);
 
     @Value("${livekit.url}")
     private String livekitUrl;
@@ -53,10 +64,14 @@ public class VoiceController {
 
     public VoiceController(BusinessService businessService,
                            CallRepository callRepository,
-                           AgentConfigRepository agentConfigRepository) {
+                           AgentConfigRepository agentConfigRepository,
+                           AccessService access,
+                           JdbcTemplate jdbc) {
         this.businessService = businessService;
         this.callRepository = callRepository;
         this.agentConfigRepository = agentConfigRepository;
+        this.access = access;
+        this.jdbc = jdbc;
     }
 
     @PostMapping("/monitor")
@@ -66,6 +81,12 @@ public class VoiceController {
 
         UUID callId = parseUuid(payload.get("callId"));
         Business business = businessService.resolveBusinessForUser(user.getId());
+
+        // The monitor token is deliberately Hidden(true), so the listener is
+        // invisible to both the caller and the agent. Silent listening to a
+        // customer call is a supervisor action, not something every member may
+        // do. (SECURITY.md F-02)
+        access.requireManager(user.getId(), business.getId().toString());
 
         // Only calls in the user's own workspace can be monitored.
         Call call = callRepository.findById(callId)
@@ -113,6 +134,16 @@ public class VoiceController {
                 .filter(a -> business.getId().equals(a.getBusinessId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Agent not found."));
 
+        // Close earlier test calls the agent never joined, so they stop counting
+        // as active on Live Monitoring. Ported from session.functions.ts.
+        jdbc.update(
+                """
+                UPDATE calls SET status = 'missed', ended_at = now()
+                WHERE business_id = ?::uuid AND provider = 'browser' AND status = 'ringing'
+                  AND started_at < now() - interval '2 minutes'
+                """,
+                business.getId().toString());
+
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         String roomName = "test-" + agent.getId().toString().substring(0, 8) + "-" + suffix;
         String participantIdentity = "user-" + user.getId().substring(0, 8) + "-" + suffix;
@@ -151,10 +182,20 @@ public class VoiceController {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not create the voice room.", e);
         }
 
+        // The browser publishes its microphone and reads the agent's attributes,
+        // so the grants are spelled out rather than left to SDK defaults — the
+        // web app granted exactly these, and canUpdateOwnMetadata defaults off.
         AccessToken token = new AccessToken(livekitApiKey, livekitApiSecret);
         token.setName("Dashboard Tester");
         token.setIdentity(participantIdentity);
-        token.addGrants(new RoomJoin(true), new RoomName(roomName));
+        token.setExpiration(Date.from(Instant.now().plus(TEST_CALL_TTL)));
+        token.addGrants(
+                new RoomJoin(true),
+                new RoomName(roomName),
+                new CanPublish(true),
+                new CanSubscribe(true),
+                new CanPublishData(true),
+                new CanUpdateOwnMetadata(true));
         token.setMetadata(String.format("{\"user_id\":\"%s\",\"mode\":\"web-test\"}", user.getId()));
 
         Map<String, String> response = new HashMap<>();

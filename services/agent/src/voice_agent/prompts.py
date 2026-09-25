@@ -56,13 +56,25 @@ def build_instructions(config: dict[str, Any], business: dict[str, Any]) -> str:
     if config.get("business_description"):
         sections.append(f"About the business: {config['business_description']}")
 
-    sections.append(
-        "Languages: you may speak "
-        f"{language_list}. Start in "
-        f"{LANGUAGE_NAMES.get(config.get('primary_language') or 'en', 'English')} and switch "
-        "immediately and completely to whichever of those languages the caller uses, including "
-        "mid-call. Do not mix languages in one sentence unless the caller does."
-    )
+    start_language = LANGUAGE_NAMES.get(config.get("primary_language") or "en", "English")
+    if len(languages) == 1:
+        # One language configured: no switching rule at all, or the model will
+        # invent one the moment it mishears a turn.
+        sections.append(
+            f"Language: speak {language_list} for the entire call, and never reply in any other "
+            "language, whatever language you think the caller used. If a turn is unclear, ask the "
+            f"caller to repeat, in {language_list}. Do not mix languages in one sentence."
+        )
+    else:
+        sections.append(
+            f"Languages: you may speak {language_list}, but only one language per call. "
+            f"Start in {start_language} and stay in it. Switch only if the caller clearly speaks "
+            "another of those languages across two consecutive turns, or explicitly asks you to "
+            "switch; then stay in the new one. A single unclear or garbled turn is never a reason "
+            "to switch: if you are unsure which language the caller used, keep speaking the one "
+            "you are already using. Never reply in a language outside that list. Do not mix "
+            "languages in one sentence."
+        )
 
     # Realtime models have no clock, so "tomorrow at eleven" is unbookable
     # without this line.

@@ -40,6 +40,19 @@ def _dump(value: Any) -> str:
     return json.dumps(value, default=str, ensure_ascii=False)
 
 
+def _dump_lookup(rows: list[Any], empty_message: str) -> str:
+    """Serializes a lookup's rows, or an explicit "nothing found" message.
+
+    A bare empty list (`_dump([])` -> `"[]"`) gives the model nothing concrete
+    to react to. In practice Gemini has gone silent on this rather than follow
+    the ground rule to offer a callback — a caller then hears nothing at all.
+    An explicit message is always something the model can relay.
+    """
+    if not rows:
+        return _dump({"found": False, "message": empty_message})
+    return _dump(rows)
+
+
 def resolve_tool_settings(settings: Mapping[str, bool]) -> tuple[set[str], set[str]]:
     """Turns the Functions tab's switches into tools to drop and tools to add."""
     disabled: set[str] = set()
@@ -81,27 +94,41 @@ def build_tools(
     @function_tool
     async def product_lookup(query: str) -> str:
         """Find products in the business catalogue by name, category or description."""
-        return _dump(await client.product_lookup(ctx, query))
+        return _dump_lookup(
+            await client.product_lookup(ctx, query),
+            f"No matching products found for '{query}'.",
+        )
 
     @function_tool
     async def service_lookup(query: str) -> str:
         """Find bookable services, with base price and duration."""
-        return _dump(await client.service_lookup(ctx, query))
+        return _dump_lookup(
+            await client.service_lookup(ctx, query),
+            f"No matching services found for '{query}'.",
+        )
 
     @function_tool
     async def pricing_lookup(query: str) -> str:
         """Get the listed price plus the lowest price you are allowed to offer."""
+        # pricing_lookup() is a database function that already returns
+        # {"found": false, "query": ...} on no match — never a bare empty value.
         return _dump(await client.pricing_lookup(ctx, query))
 
     @function_tool
     async def policy_lookup(topic: str) -> str:
         """Read the business's own policy text on returns, warranty, payment or delivery."""
-        return _dump(await client.policy_lookup(ctx, topic))
+        return _dump_lookup(
+            await client.policy_lookup(ctx, topic),
+            f"No policy found for '{topic}'.",
+        )
 
     @function_tool
     async def knowledge_lookup(topic: str) -> str:
         """Look up background notes the owner wrote for this business."""
-        return _dump(await client.knowledge_lookup(ctx, topic))
+        return _dump_lookup(
+            await client.knowledge_lookup(ctx, topic),
+            f"No background notes found for '{topic}'.",
+        )
 
     @function_tool
     async def appointment_check(date: str, time: str) -> str:

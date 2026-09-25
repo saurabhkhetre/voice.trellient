@@ -13,11 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
-import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -29,7 +25,7 @@ import java.util.List;
 @Component
 public class SessionAuthFilter extends OncePerRequestFilter {
 
-    static final String SESSION_COOKIE = "trellient_session";
+    public static final String SESSION_COOKIE = "trellient_session";
 
     private final JdbcTemplate jdbc;
 
@@ -46,7 +42,7 @@ public class SessionAuthFilter extends OncePerRequestFilter {
             List<String> userIds = jdbc.queryForList(
                     "SELECT user_id::text FROM user_sessions WHERE token_hash = ? AND expires_at > now()",
                     String.class,
-                    sha256Hex(token));
+                    SessionService.sha256Hex(token));
             if (!userIds.isEmpty()) {
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         new UserPrincipal(userIds.get(0)), null, Collections.emptyList());
@@ -75,12 +71,4 @@ public class SessionAuthFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private static String sha256Hex(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is unavailable", e);
-        }
-    }
 }

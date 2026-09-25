@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import {
   ConnectionState,
   RemoteAudioTrack,
@@ -9,7 +8,8 @@ import {
   createLocalAudioTrack,
 } from "livekit-client";
 
-import { createTestCallSession } from "@/lib/voice/session.functions";
+import { apiPost } from "@/lib/api/client";
+import { type TestCallToken } from "@/lib/api/contracts";
 import {
   AGENT_STATE_ATTRIBUTE,
   TRANSCRIPTION_TOPIC,
@@ -22,7 +22,6 @@ const AGENT_WAIT_MS = 30_000;
 
 /** SessionManager + AgentStateManager for the in-dashboard web test call. */
 export function useVoiceSession() {
-  const issue = useServerFn(createTestCallSession);
   const roomRef = useRef<Room | null>(null);
   const agentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -30,6 +29,11 @@ export function useVoiceSession() {
   const [agentState, setAgentState] = useState<AgentState>("unknown");
   const [micEnabled, setMicEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Always empty since the move to Spring, and kept because TestCallPanel
+  // renders it. The web app read LIVEKIT_* straight from process.env and could
+  // name the unset ones; the API resolves them through application.yml, which
+  // supplies dev defaults, so "unset" is not a state it can observe. A
+  // misconfigured deployment now surfaces as the room-creation error instead.
   const [missingConfig, setMissingConfig] = useState<string[]>([]);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [level, setLevel] = useState(0);
@@ -69,11 +73,11 @@ export function useVoiceSession() {
         const micTrack = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true });
 
         setStatus("issuing-token");
-        const session = await issue({ data: { agentConfigId } });
-        if (!session.ok) {
-          setMissingConfig(session.missing ?? []);
-          throw new Error(session.error);
-        }
+        // Spring: POST /api/voice/test-call — creates the call row and the
+        // LiveKit room, then mints the join token. A refusal (not a member of
+        // the agent's workspace, agent gone, room unreachable) arrives as an
+        // ApiError and is caught below.
+        const session = await apiPost<TestCallToken>("/voice/test-call", { agentConfigId });
 
         setStatus("connecting");
         const room = new Room({ adaptiveStream: true, dynacast: true });
@@ -162,7 +166,7 @@ export function useVoiceSession() {
         });
       }
     },
-    [disconnect, issue],
+    [disconnect],
   );
 
   const toggleMic = useCallback(async () => {

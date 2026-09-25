@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { Bot, Phone, BookOpen, PhoneOutgoing, History, BarChart3 } from "lucide-react";
 
 import { PageHeader, Panel, StatCard } from "@/components/dashboard/Shell";
-import { getDashboardStats, getRecentCalls } from "@/lib/analytics/stats.functions";
+import { apiGet } from "@/lib/api/client";
+// Types only — the server functions stay in place until this page is confirmed
+// on Spring, and importing them keeps both response shapes checked in step.
+import { type DashboardStats, type RecentCall } from "@/lib/api/contracts";
 import { formatDateTime, formatDuration, useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/")({
@@ -14,14 +16,13 @@ export const Route = createFileRoute("/_authenticated/dashboard/")({
 function DashboardHome() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
-  const fetchStats = useServerFn(getDashboardStats);
-  const fetchRecentCalls = useServerFn(getRecentCalls);
 
   /* ---- Server-side stats (workspace-scoped, auth-enforced) ---- */
   const stats = useQuery({
     queryKey: ["dashboard-stats"],
     staleTime: 2 * 60_000,
-    queryFn: () => fetchStats(),
+    // Spring: GET /api/stats/dashboard
+    queryFn: () => apiGet<DashboardStats>("/stats/dashboard"),
   });
 
   /* ---- Recent calls ---- */
@@ -29,7 +30,8 @@ function DashboardHome() {
     queryKey: ["recent-calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 2 * 60_000,
-    queryFn: () => fetchRecentCalls(),
+    // Spring: GET /api/stats/recent-calls (scoped to the caller's workspace)
+    queryFn: () => apiGet<RecentCall[]>("/stats/recent-calls"),
   });
 
   const d = stats.data;

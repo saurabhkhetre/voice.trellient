@@ -1,26 +1,27 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { getCallDetail, listAgentCalls } from "@/lib/voice/calls.functions";
+import { apiGet } from "@/lib/api/client";
+// Types only — the server functions stay until this page is confirmed on Spring.
+import { type AgentCall, type CallDetail } from "@/lib/api/contracts";
 
 /** Call history for the selected agent, with expandable transcripts. */
 export function CallHistorySection({ agentId }: { agentId: string }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const fetchCalls = useServerFn(listAgentCalls);
-  const fetchDetail = useServerFn(getCallDetail);
 
   const calls = useQuery({
     queryKey: ["agent-calls", agentId],
-    queryFn: () => fetchCalls({ data: { agentConfigId: agentId } }),
+    // Spring: GET /api/calls/by-agent/{agentConfigId}
+    queryFn: () => apiGet<AgentCall[]>(`/calls/by-agent/${agentId}`),
   });
 
   const transcript = useQuery({
     queryKey: ["call-transcript", openId],
     enabled: Boolean(openId),
-    queryFn: async () => (await fetchDetail({ data: { callId: openId! } })).transcripts,
+    // Spring: GET /api/calls/{callId}
+    queryFn: async () => (await apiGet<CallDetail>(`/calls/${openId!}`)).transcripts,
   });
 
   const list = calls.data ?? [];

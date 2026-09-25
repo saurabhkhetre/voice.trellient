@@ -1,10 +1,9 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/dashboard/Shell";
-import { provisionWorkspace } from "@/lib/business/provision.functions";
+import { apiPost } from "@/lib/api/client";
 import { useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -30,10 +29,11 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function DashboardLayout() {
   const { data, isLoading } = useBusiness();
   const queryClient = useQueryClient();
-  const provision = useServerFn(provisionWorkspace);
-
   const create = useMutation({
-    mutationFn: () => provision({ data: {} }),
+    // Spring: POST /api/business/provision — idempotent, so a second click
+    // returns the existing workspace with created=false instead of failing.
+    mutationFn: () =>
+      apiPost<{ businessId: string; created: boolean }>("/business/provision", {}),
     onSuccess: () => {
       toast.success("Workspace ready.");
       void queryClient.invalidateQueries({ queryKey: ["business-context"] });

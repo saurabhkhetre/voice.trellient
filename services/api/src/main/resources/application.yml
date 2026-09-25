@@ -21,7 +21,17 @@ spring:
 app:
   cors:
     # Comma-separated browser origins allowed to call this API.
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    #
+    # Both the localhost and 127.0.0.1 spellings are listed: the dev server is
+    # pinned to 127.0.0.1 (vite.config.ts), and a browser sends an Origin header
+    # on POST even when the request is same-origin through the proxy. Listing
+    # only one spelling makes every read succeed and every write fail with
+    # "Invalid CORS request".
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
+  session:
+    # The session cookie's Secure flag. Must be true wherever the app is served
+    # over HTTPS; left off by default so local http://localhost works.
+    secure-cookie: ${APP_SESSION_SECURE_COOKIE:false}
 
 livekit:
   url: ${LIVEKIT_URL:ws://localhost:7880}

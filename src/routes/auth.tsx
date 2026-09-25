@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { getCurrentUser, signIn, signUp } from "@/lib/auth/auth.functions";
+import { apiGet, apiPost } from "@/lib/api/client";
+import { type CurrentUser } from "@/lib/api/contracts";
 
 const title = "Sign in — Trellient";
 const description = "Sign in to the Trellient dashboard to manage your business data and AI voice agent.";
@@ -27,9 +27,6 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const checkSession = useServerFn(getCurrentUser);
-  const signInFn = useServerFn(signIn);
-  const signUpFn = useServerFn(signUp);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,24 +34,29 @@ function AuthPage() {
 
   // Already signed in: go straight to the dashboard.
   useEffect(() => {
-    checkSession()
+    // Spring: GET /api/auth/me. It answers 204 for "nobody", which the client
+    // surfaces as undefined — getCurrentUser() returned null, so normalise.
+    apiGet<CurrentUser | null>("/auth/me")
       .then((user) => {
-        if (user) void navigate({ to: "/dashboard", replace: true });
+        if (user ?? null) void navigate({ to: "/dashboard", replace: true });
       })
       .catch(() => {
         // Treat a failed check as signed out; the form stays usable.
       });
-  }, [checkSession, navigate]);
+  }, [navigate]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
+      // Spring: POST /api/auth/signup / /signin. Both set the trellient_session
+      // cookie on the response and reject with an ApiError whose message is the
+      // same wording the server functions threw.
       if (mode === "signup") {
-        await signUpFn({ data: { email, password } });
+        await apiPost<CurrentUser>("/auth/signup", { email, password });
         toast.success("Account created.");
       } else {
-        await signInFn({ data: { email, password } });
+        await apiPost<CurrentUser>("/auth/signin", { email, password });
       }
       // Another account may have been signed in before; drop its cached data.
       queryClient.clear();

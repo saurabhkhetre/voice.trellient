@@ -25,10 +25,21 @@ export default defineConfig({
     proxy: {
       // Only the Spring Boot API's own paths. Everything else under /api —
       // notably /api/public/telephony/* — is served by this app.
-      "^/api/(stats|business|voice)(/|$)": {
-        target: "http://localhost:8080",
-        changeOrigin: true,
-      },
+      //
+      // Plain prefixes, not a regex. Vite tests a regex key against the path
+      // *and* query string, so "^/api/calls(/|$)" misses
+      // /api/calls?businessId=... and it falls through to the app as a 404.
+      // A prefix key uses startsWith, which has no such edge, and each page
+      // migrated onto Spring adds exactly one line here.
+      "/api/stats": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/business": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/voice": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/calls": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/records": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/alerts": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/phone-numbers": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/agents": { target: "http://localhost:8080", changeOrigin: true },
+      "/api/auth": { target: "http://localhost:8080", changeOrigin: true },
     },
   },
 });

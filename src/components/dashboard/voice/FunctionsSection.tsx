@@ -1,17 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { Plus, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import {
-  addAgentTool,
-  deleteAgentTool,
-  listAgentTools,
-  updateAgentTool,
-  type AgentTool,
-  type AgentToolPatch,
-} from "@/lib/voice/agent-tools.functions";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+// Types only — the server functions stay until this page is confirmed on Spring.
+import { type AgentTool, type AgentToolPatch } from "@/lib/api/contracts";
 
 const PRESETS: { type: string; name: string; description: string }[] = [
   { type: "end_call", name: "End call", description: "Hang up politely once the caller's request is resolved." },
@@ -30,29 +24,31 @@ const PRESETS: { type: string; name: string; description: string }[] = [
 export function FunctionsSection({ agentId }: { agentId: string; businessId: string }) {
   const queryClient = useQueryClient();
   const queryKey = ["agent-tools", agentId];
-  const fetchTools = useServerFn(listAgentTools);
-  const addTool = useServerFn(addAgentTool);
-  const updateTool = useServerFn(updateAgentTool);
-  const removeTool = useServerFn(deleteAgentTool);
 
   const tools = useQuery({
     queryKey,
-    queryFn: () => fetchTools({ data: { agentConfigId: agentId } }),
+    // Spring: GET /api/agents/{id}/tools
+    queryFn: () => apiGet<AgentTool[]>(`/agents/${agentId}/tools`),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey });
 
   const add = useMutation({
+    // Spring: POST /api/agents/{id}/tools — owner/manager only.
     mutationFn: (preset: (typeof PRESETS)[number]) =>
-      addTool({
-        data: { agentConfigId: agentId, name: preset.name, description: preset.description, toolType: preset.type },
+      apiPost<{ id: string }>(`/agents/${agentId}/tools`, {
+        name: preset.name,
+        description: preset.description,
+        toolType: preset.type,
       }),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
 
   const update = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: AgentToolPatch }) => updateTool({ data: { toolId: id, patch } }),
+    // Spring: PATCH /api/agents/tools/{toolId} — body is the patch itself.
+    mutationFn: ({ id, patch }: { id: string; patch: AgentToolPatch }) =>
+      apiPatch<void>(`/agents/tools/${id}`, patch),
     // Apply edits locally right away, so typing in a field doesn't wait on the server.
     onMutate: ({ id, patch }) => {
       queryClient.setQueryData<AgentTool[]>(queryKey, (old) =>
@@ -66,7 +62,8 @@ export function FunctionsSection({ agentId }: { agentId: string; businessId: str
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => removeTool({ data: { toolId: id } }),
+    // Spring: DELETE /api/agents/tools/{toolId} — owner/manager only.
+    mutationFn: (id: string) => apiDelete<void>(`/agents/tools/${id}`),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });

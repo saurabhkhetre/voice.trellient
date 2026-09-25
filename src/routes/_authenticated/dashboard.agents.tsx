@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bot, PlusCircle, Sparkles } from "lucide-react";
@@ -12,13 +11,7 @@ import { PhoneNumbersSection } from "@/components/dashboard/voice/PhoneNumbersSe
 import { TestCallPanel } from "@/components/dashboard/voice/TestCallPanel";
 import { useBusiness } from "@/lib/business/useBusiness";
 import type { Database } from "@/lib/db/types";
-import {
-  createAgentConfig,
-  getAgentRuntime,
-  listAgentConfigs,
-  publishAgentConfig,
-  saveAgentConfig,
-} from "@/lib/voice/agent-configs.functions";
+import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import {
   relativeTime,
@@ -88,11 +81,6 @@ function VoiceAgentDashboard() {
   const businessId = ctx?.business.id;
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-configs", businessId], [businessId]);
-  const listAgents = useServerFn(listAgentConfigs);
-  const fetchRuntime = useServerFn(getAgentRuntime);
-  const createAgentFn = useServerFn(createAgentConfig);
-  const saveAgentFn = useServerFn(saveAgentConfig);
-  const publishAgentFn = useServerFn(publishAgentConfig);
 
   const agents = useQuery({
     queryKey,
@@ -100,16 +88,19 @@ function VoiceAgentDashboard() {
     staleTime: 30_000,
     queryFn: async () => {
       if (!businessId) return [];
-      const rows = await listAgents({ data: { businessId } });
-      return rows as AgentRow[];
+      // Spring: GET /api/agents?businessId
+      return await apiGet<AgentRow[]>("/agents", { businessId });
     },
   });
 
   const runtime = useQuery<Record<string, AgentRuntime>>({
     queryKey: ["agent-runtime", businessId],
     enabled: Boolean(businessId),
+    // Spring: GET /api/agents/runtime?businessId
     queryFn: () =>
-      businessId ? fetchRuntime({ data: { businessId } }) : Promise.resolve({} as Record<string, AgentRuntime>),
+      businessId
+        ? apiGet<Record<string, AgentRuntime>>("/agents/runtime", { businessId })
+        : Promise.resolve({} as Record<string, AgentRuntime>),
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
@@ -131,8 +122,11 @@ function VoiceAgentDashboard() {
   const save = useMutation({
     mutationFn: async () => {
       if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
-      const agentConfigId = selected?.id ?? (await createAgentFn({ data: { businessId } })).id;
-      await saveAgentFn({ data: { agentConfigId, changes: draft } });
+      // Spring: POST /api/agents to create, then PATCH /api/agents/{id} with
+      // the draft as the body. Both are owner/manager only.
+      const agentConfigId =
+        selected?.id ?? (await apiPost<{ id: string }>("/agents", { businessId })).id;
+      await apiPatch<void>(`/agents/${agentConfigId}`, draft);
     },
     onSuccess: () => {
       toast.success("Agent saved.");
@@ -145,7 +139,9 @@ function VoiceAgentDashboard() {
     mutationFn: async () => {
       if (!selected?.id) throw new Error("No agent selected.");
       // Saves the draft, bumps the version and stores a snapshot in one transaction.
-      await publishAgentFn({ data: { agentConfigId: selected.id, changes: draft } });
+      // Spring: POST /api/agents/{id}/publish — saves the draft, bumps the
+      // version and snapshots it in one transaction. Owner/manager only.
+      await apiPost<{ version: number }>(`/agents/${selected.id}/publish`, draft);
     },
     onSuccess: () => {
       toast.success("Published! New calls will use this version.");
@@ -157,7 +153,8 @@ function VoiceAgentDashboard() {
   const createAgent = useMutation({
     mutationFn: async () => {
       if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
-      return createAgentFn({ data: { businessId } });
+      // Spring: POST /api/agents
+      return apiPost<{ id: string }>("/agents", { businessId });
     },
     onSuccess: (row) => {
       setSelectedId(row.id);

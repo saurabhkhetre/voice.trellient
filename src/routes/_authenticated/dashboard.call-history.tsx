@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/dashboard/Shell";
 import { formatDateTime, formatDuration, useBusiness } from "@/lib/business/useBusiness";
 import { cn } from "@/lib/utils";
-import { getCallDetail, listCalls } from "@/lib/voice/calls.functions";
+import { apiGet } from "@/lib/api/client";
+import { type CallDetail, type CallSummary } from "@/lib/api/contracts";
 
 export const Route = createFileRoute("/_authenticated/dashboard/call-history")({
   component: CallsPage,
@@ -16,20 +16,20 @@ function CallsPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
   const [selected, setSelected] = useState<string | null>(null);
-  const fetchCalls = useServerFn(listCalls);
-  const fetchDetail = useServerFn(getCallDetail);
 
   const calls = useQuery({
     queryKey: ["calls", businessId],
     enabled: Boolean(businessId),
     staleTime: 60_000,
-    queryFn: () => fetchCalls({ data: { businessId: businessId!, scope: "recent" } }),
+    // Spring: GET /api/calls?businessId&scope
+    queryFn: () => apiGet<CallSummary[]>("/calls", { businessId: businessId!, scope: "recent" }),
   });
 
   const detail = useQuery({
     queryKey: ["call-detail", selected],
     enabled: Boolean(selected),
-    queryFn: () => fetchDetail({ data: { callId: selected! } }),
+    // Spring: GET /api/calls/{callId} — transcript lines plus call events.
+    queryFn: () => apiGet<CallDetail>(`/calls/${selected!}`),
   });
 
   const current = calls.data?.find((c) => c.id === selected) ?? null;

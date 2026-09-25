@@ -1,19 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Phone, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/dashboard/Shell";
 import { useBusiness } from "@/lib/business/useBusiness";
-import {
-  addPhoneNumber,
-  deletePhoneNumber,
-  listPhoneNumbers,
-  updatePhoneNumber,
-} from "@/lib/telephony/phone-numbers.functions";
-import { listAgentConfigs } from "@/lib/voice/agent-configs.functions";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+// Type only — the server functions stay until this page is confirmed on Spring.
+import { type PhoneNumber } from "@/lib/api/contracts";
+import { type AgentConfigRow } from "@/lib/voice/agent-configs.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard/phone-numbers")({
   component: PhoneNumbersPage,
@@ -26,11 +22,6 @@ function PhoneNumbersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newNumber, setNewNumber] = useState("");
   const [newLabel, setNewLabel] = useState("");
-  const fetchNumbers = useServerFn(listPhoneNumbers);
-  const fetchAgents = useServerFn(listAgentConfigs);
-  const addNumber = useServerFn(addPhoneNumber);
-  const updateNumber = useServerFn(updatePhoneNumber);
-  const removeNumber = useServerFn(deletePhoneNumber);
 
   const queryKey = ["phone-numbers", businessId];
 
@@ -38,21 +29,28 @@ function PhoneNumbersPage() {
     queryKey,
     enabled: Boolean(businessId),
     staleTime: 60_000,
-    queryFn: () => fetchNumbers({ data: { businessId: businessId! } }),
+    // Spring: GET /api/phone-numbers?businessId
+    queryFn: () => apiGet<PhoneNumber[]>("/phone-numbers", { businessId: businessId! }),
   });
 
   const agents = useQuery({
     queryKey: ["agent-configs", businessId],
     enabled: Boolean(businessId),
     staleTime: 5 * 60_000,
-    queryFn: () => fetchAgents({ data: { businessId: businessId! } }),
+    // Spring: GET /api/agents?businessId
+    queryFn: () => apiGet<AgentConfigRow[]>("/agents", { businessId: businessId! }),
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey });
 
   const addMutation = useMutation({
+    // Spring: POST /api/phone-numbers — owner/manager only.
     mutationFn: () =>
-      addNumber({ data: { businessId: businessId!, phoneNumber: newNumber, label: newLabel.trim() || null } }),
+      apiPost<{ id: string }>("/phone-numbers", {
+        businessId: businessId!,
+        phoneNumber: newNumber,
+        label: newLabel.trim() || null,
+      }),
     onSuccess: () => {
       toast.success("Phone number added. Configure your telephony provider to point at your Trellient webhook.");
       setNewNumber("");
@@ -64,14 +62,17 @@ function PhoneNumbersPage() {
   });
 
   const updateMutation = useMutation({
+    // Spring: PATCH /api/phone-numbers/{id}. Reassigning to an agent is
+    // re-checked server-side against the number's own business_id.
     mutationFn: ({ id, patch }: { id: string; patch: { agentConfigId?: string | null; active?: boolean } }) =>
-      updateNumber({ data: { phoneNumberId: id, ...patch } }),
+      apiPatch<void>(`/phone-numbers/${id}`, patch),
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
 
   const removeMutation = useMutation({
-    mutationFn: (id: string) => removeNumber({ data: { phoneNumberId: id } }),
+    // Spring: DELETE /api/phone-numbers/{id} — owner/manager only.
+    mutationFn: (id: string) => apiDelete<void>(`/phone-numbers/${id}`),
     onSuccess: () => {
       toast.success("Phone number removed.");
       invalidate();

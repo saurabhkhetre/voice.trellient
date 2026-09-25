@@ -1,18 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { Bell, PlusCircle, Trash2, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader, Panel, Pill, EmptyState } from "@/components/dashboard/Shell";
-import {
-  createAlertRule,
-  deleteAlertRule,
-  listAlertRules,
-  setAlertRuleEnabled,
-  type AlertRule,
-} from "@/lib/alerts/alerts.functions";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+// Type only — the server functions stay until this page is confirmed on Spring.
+import { type AlertRule } from "@/lib/api/contracts";
 import { useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/alerting")({
@@ -31,10 +26,6 @@ function AlertingPage() {
   const { data: ctx } = useBusiness();
   const businessId = ctx?.business.id;
   const qc = useQueryClient();
-  const fetchRules = useServerFn(listAlertRules);
-  const createRule = useServerFn(createAlertRule);
-  const setRuleEnabled = useServerFn(setAlertRuleEnabled);
-  const removeRule = useServerFn(deleteAlertRule);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -47,7 +38,8 @@ function AlertingPage() {
     queryKey: ["alert-rules", businessId],
     enabled: Boolean(businessId),
     staleTime: 30_000,
-    queryFn: () => fetchRules({ data: { businessId: businessId! } }),
+    // Spring: GET /api/alerts?businessId
+    queryFn: () => apiGet<AlertRule[]>("/alerts", { businessId: businessId! }),
   });
 
   const rules = rulesQuery.data ?? [];
@@ -56,14 +48,13 @@ function AlertingPage() {
   const createMutation = useMutation({
     mutationFn: () => {
       if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
-      return createRule({
-        data: {
-          businessId,
-          name: newName,
-          conditionType: newConditionType,
-          threshold: newConditionType === "escalation" ? "" : newThreshold,
-          channel: newChannel,
-        },
+      // Spring: POST /api/alerts — owner/manager only.
+      return apiPost<{ id: string }>("/alerts", {
+        businessId,
+        name: newName,
+        conditionType: newConditionType,
+        threshold: newConditionType === "escalation" ? "" : newThreshold,
+        channel: newChannel,
       });
     },
     onSuccess: () => {
@@ -82,8 +73,9 @@ function AlertingPage() {
 
   /* ---- Toggle rule ---- */
   const toggleMutation = useMutation({
+    // Spring: PATCH /api/alerts/{ruleId} — owner/manager only.
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      setRuleEnabled({ data: { ruleId: id, enabled: !enabled } }),
+      apiPatch<void>(`/alerts/${id}`, { enabled: !enabled }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["alert-rules"] });
     },
@@ -94,7 +86,8 @@ function AlertingPage() {
 
   /* ---- Delete rule ---- */
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => removeRule({ data: { ruleId: id } }),
+    // Spring: DELETE /api/alerts/{ruleId} — owner/manager only.
+    mutationFn: (id: string) => apiDelete<void>(`/alerts/${id}`),
     onSuccess: () => {
       toast.success("Alert rule deleted.");
       void qc.invalidateQueries({ queryKey: ["alert-rules"] });

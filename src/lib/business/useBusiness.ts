@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 
-import { getBusinessContext, type BusinessContextPayload } from "@/lib/business/business.functions";
+import { apiGet } from "@/lib/api/client";
+import { type BusinessContextPayload } from "@/lib/api/contracts";
 
-export type { Business, BusinessRole } from "@/lib/business/business.functions";
+export type { Business, BusinessRole } from "@/lib/api/contracts";
 export type BusinessContext = BusinessContextPayload;
 
 /**
@@ -11,12 +11,15 @@ export type BusinessContext = BusinessContextPayload;
  * derived from the session — never from the browser URL or user input.
  */
 export function useBusiness() {
-  const getContext = useServerFn(getBusinessContext);
   return useQuery<BusinessContext | null>({
     queryKey: ["business-context"],
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
-    queryFn: () => getContext(),
+    // Spring: GET /api/business/context. It answers 204 for a user with no
+    // workspace, which the client surfaces as undefined — getBusinessContext()
+    // returned null there, and the dashboard layout branches on !data to show
+    // the "No workspace yet" state, so the null must be preserved.
+    queryFn: async () => (await apiGet<BusinessContext | null>("/business/context")) ?? null,
   });
 }
 

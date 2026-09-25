@@ -79,4 +79,5 @@ class GeminiLiveProvider(RealtimeModelProvider):
             model=model,
             voice=voice,
             api_key=self.infra.provider_keys["google"],
+            realtime_input_config=_turn_detection(),
         )

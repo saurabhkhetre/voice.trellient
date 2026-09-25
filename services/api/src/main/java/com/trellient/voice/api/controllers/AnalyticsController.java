@@ -1,5 +1,6 @@
 package com.trellient.voice.api.controllers;
 
+import com.trellient.voice.api.access.AccessService;
 import com.trellient.voice.api.models.Business;
 import com.trellient.voice.api.models.Call;
 import com.trellient.voice.api.repositories.AgentConfigRepository;
@@ -7,6 +8,8 @@ import com.trellient.voice.api.repositories.CallRepository;
 import com.trellient.voice.api.repositories.EscalationRepository;
 import com.trellient.voice.api.security.UserPrincipal;
 import com.trellient.voice.api.services.BusinessService;
+import com.trellient.voice.api.web.Rows;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +20,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,15 +33,21 @@ public class AnalyticsController {
     private final AgentConfigRepository agentConfigRepository;
     private final EscalationRepository escalationRepository;
     private final BusinessService businessService;
+    private final JdbcTemplate jdbc;
+    private final AccessService access;
 
     public AnalyticsController(CallRepository callRepository,
                                AgentConfigRepository agentConfigRepository,
                                EscalationRepository escalationRepository,
-                               BusinessService businessService) {
+                               BusinessService businessService,
+                               JdbcTemplate jdbc,
+                               AccessService access) {
         this.callRepository = callRepository;
         this.agentConfigRepository = agentConfigRepository;
         this.escalationRepository = escalationRepository;
         this.businessService = businessService;
+        this.jdbc = jdbc;
+        this.access = access;
     }
 
     @GetMapping("/dashboard")
@@ -122,6 +132,36 @@ public class AnalyticsController {
         result.put("callsByStatus", callsByStatus);
         
         return result;
+    }
+
+    /**
+     * The five most recent calls in the user's workspace, for the dashboard's
+     * activity list. Ported from getRecentCalls() in stats.functions.ts.
+     */
+    @GetMapping("/recent-calls")
+    public List<Map<String, Object>> getRecentCalls(@AuthenticationPrincipal UserPrincipal user) {
+        String businessId = access.resolveBusinessId(user.getId());
+        return jdbc.query(
+                """
+                SELECT c.id::text AS id, c.started_at, c.duration_seconds, c.caller_number,
+                       c.status::text AS status, cu.name AS customer_name
+                FROM calls c
+                LEFT JOIN customers cu ON cu.id = c.customer_id
+                WHERE c.business_id = ?::uuid
+                ORDER BY c.started_at DESC
+                LIMIT 5
+                """,
+                (rs, i) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getString("id"));
+                    row.put("startedAt", Rows.iso(rs, "started_at"));
+                    row.put("durationSeconds", Rows.intOrNull(rs, "duration_seconds"));
+                    row.put("callerNumber", rs.getString("caller_number"));
+                    row.put("status", rs.getString("status"));
+                    row.put("customerName", rs.getString("customer_name"));
+                    return row;
+                },
+                businessId);
     }
 
     private OffsetDateTime getSinceFromRange(String range) {

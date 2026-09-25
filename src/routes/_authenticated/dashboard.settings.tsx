@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 import { RecordForm, type Row } from "@/components/dashboard/CrudSection";
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/dashboard/Shell";
-import { listTeam, updateBusiness } from "@/lib/business/business.functions";
+import { apiGet, apiPatch } from "@/lib/api/client";
+import { type TeamMember } from "@/lib/api/contracts";
 import { useBusiness } from "@/lib/business/useBusiness";
 
 export const Route = createFileRoute("/_authenticated/dashboard/settings")({
@@ -16,17 +16,18 @@ function SettingsPage() {
   const { data: ctx } = useBusiness();
   const queryClient = useQueryClient();
   const businessId = ctx?.business.id;
-  const fetchTeam = useServerFn(listTeam);
-  const saveBusiness = useServerFn(updateBusiness);
-
   const team = useQuery({
     queryKey: ["team", businessId],
     enabled: Boolean(businessId),
-    queryFn: () => fetchTeam({ data: { businessId: businessId! } }),
+    // Spring: GET /api/business/team?businessId — any member may read it.
+    queryFn: () => apiGet<TeamMember[]>("/business/team", { businessId: businessId! }),
   });
 
   const save = useMutation({
-    mutationFn: (values: Row) => saveBusiness({ data: { businessId: businessId!, values } }),
+    // Spring: PATCH /api/business/{businessId} — owner/manager only, and the
+    // values go in the body rather than nested under `values`. A rejection
+    // arrives as an ApiError, which onError already surfaces as its message.
+    mutationFn: (values: Row) => apiPatch<void>(`/business/${businessId!}`, values),
     onSuccess: () => {
       toast.success("Business details saved.");
       void queryClient.invalidateQueries({ queryKey: ["business-context"] });

@@ -90,6 +90,27 @@ def _is_broad_query(query: str) -> bool:
     return query.strip().lower() in _BROAD_QUERY_TERMS
 
 
+# Callers ask questions, not keywords: "where can I park", not "parking". A
+# substring match on the whole sentence almost never hits, so the sentence is
+# turned into an OR of its terms and the rows are ranked by how well they match.
+#
+# The query is built with plainto_tsquery and then has its & operators swapped
+# for |. plainto_tsquery already strips punctuation and stop words and quotes
+# every lexeme, so arbitrary caller speech cannot inject tsquery syntax --
+# `O'Brien & sons: "quoted"` parses to five harmless lexemes. Its own output is
+# AND-ed, which is too strict: "how long do repairs take" would demand
+# long AND repair AND take. Replacing & with | asks for any term and lets
+# ts_rank decide the order.
+#
+# The title is weighted above the body, so a note *about* parking outranks one
+# that merely mentions it in passing.
+_TSVECTOR = (
+    "setweight(to_tsvector('english', {title}), 'A') || "
+    "setweight(to_tsvector('english', content), 'B')"
+)
+_OR_TSQUERY = "replace(plainto_tsquery('english', ${n})::text, '&', '|')::tsquery"
+
+
 def _parse_date(value: str) -> date_cls:
     return date_cls.fromisoformat(value)
 
@@ -283,17 +304,35 @@ class BusinessClient:
                    LIMIT 5""",
                 ctx.business_id,
             )
-        else:
-            pattern = f"%{topic}%"
-            rows = await self.conn.fetch(
-                """SELECT policy_type, title, content
-                   FROM business_policies
-                   WHERE business_id = $1 AND active
-                     AND (policy_type ILIKE $2 OR title ILIKE $2 OR content ILIKE $2)
-                   LIMIT 3""",
-                ctx.business_id,
-                pattern,
-            )
+            return [dict(r) for r in rows]
+
+        # policy_type is a short label ("returns", "warranty") and carries as
+        # much signal as the title, so both sit in the A weight.
+        vector = _TSVECTOR.format(title="policy_type || ' ' || title")
+        query = _OR_TSQUERY.format(n=2)
+        rows = await self.conn.fetch(
+            f"""SELECT policy_type, title, content
+                FROM business_policies
+                WHERE business_id = $1 AND active AND ({vector}) @@ {query}
+                ORDER BY ts_rank({vector}, {query}) DESC, policy_type
+                LIMIT 3""",
+            ctx.business_id,
+            topic,
+        )
+        if rows:
+            return [dict(r) for r in rows]
+
+        # Same reason as knowledge_lookup: whole-word stemming misses partial
+        # words and non-English text, so the substring match stays as a net.
+        rows = await self.conn.fetch(
+            """SELECT policy_type, title, content
+               FROM business_policies
+               WHERE business_id = $1 AND active
+                 AND (policy_type ILIKE $2 OR title ILIKE $2 OR content ILIKE $2)
+               LIMIT 3""",
+            ctx.business_id,
+            f"%{topic}%",
+        )
         return [dict(r) for r in rows]
 
     async def knowledge_lookup(self, ctx: BusinessContext, topic: str) -> list[dict[str, Any]]:
@@ -307,16 +346,34 @@ class BusinessClient:
                    LIMIT 5""",
                 ctx.business_id,
             )
-        else:
-            pattern = f"%{topic}%"
-            rows = await self.conn.fetch(
-                """SELECT title, content
-                   FROM agent_knowledge
-                   WHERE business_id = $1 AND active AND (title ILIKE $2 OR content ILIKE $2)
-                   LIMIT 3""",
-                ctx.business_id,
-                pattern,
-            )
+            return [dict(r) for r in rows]
+
+        vector = _TSVECTOR.format(title="title")
+        query = _OR_TSQUERY.format(n=2)
+        rows = await self.conn.fetch(
+            f"""SELECT title, content
+                FROM agent_knowledge
+                WHERE business_id = $1 AND active AND ({vector}) @@ {query}
+                ORDER BY ts_rank({vector}, {query}) DESC, title
+                LIMIT 3""",
+            ctx.business_id,
+            topic,
+        )
+        if rows:
+            return [dict(r) for r in rows]
+
+        # Full-text search works on whole words, so a partial one ("warrant" for
+        # "warranty") finds nothing where the old substring match did. It also
+        # only stems English, while a note may be written in Hindi or Marathi.
+        # Falling back to the substring match keeps both cases working.
+        rows = await self.conn.fetch(
+            """SELECT title, content
+               FROM agent_knowledge
+               WHERE business_id = $1 AND active AND (title ILIKE $2 OR content ILIKE $2)
+               LIMIT 3""",
+            ctx.business_id,
+            f"%{topic}%",
+        )
         return [dict(r) for r in rows]
 
     async def appointment_check(self, ctx: BusinessContext, date: str, time: str) -> Any:

@@ -18,6 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const migrationsDir = path.join(root, "db", "migrations");
 const converterPath = path.join(root, "db", "convert-from-supabase.sql");
+const knowledgeSeedPath = path.join(root, "db", "seeds", "dev-knowledge.sql");
 const BASELINE = "0001_schema.sql";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/trellient";
@@ -126,6 +127,11 @@ async function main() {
      WHERE NOT EXISTS (SELECT 1 FROM products WHERE business_id = $1 AND name = 'Sample Widget')`,
     [DEV_BUSINESS_ID],
   );
+
+  // The knowledge corpus the agent's retrieval is evaluated against. Kept in
+  // its own file because it is prose, not schema, and it is long. Matched on
+  // title, so this is safe to re-run and will not overwrite dashboard edits.
+  await client.query(await readFile(knowledgeSeedPath, "utf8"));
 
   console.log("Seed complete:");
   console.log(`  Dev sign-in          = ${DEV_EMAIL} / ${DEV_PASSWORD} (if this user was just created)`);

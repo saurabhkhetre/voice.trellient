@@ -24,11 +24,35 @@ DEFAULT_VOICE = "Puck"
 VOICES = frozenset({"Puck", "Charon", "Kore", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr"})
 
 # How long a caller must be quiet before Gemini treats their turn as finished.
-# Left at its default, most of a reply's delay is dead air, which a caller on a
-# phone reads as the agent having missed the question. Too short and the agent
-# talks over anyone who pauses mid-sentence, so this sits deliberately between.
-END_OF_TURN_SILENCE_MS = 700
+#
+# This was 700ms with END_SENSITIVITY_HIGH, chosen to cut dead air. On a live
+# call that truncated callers mid-sentence -- "Where can I" arrived as a
+# finished turn -- so it now waits longer and ends a turn less eagerly. That
+# partially reverses the dead-air tuning on purpose: a clipped question is worse
+# than a slower answer, because the caller has to start again. Measure both.
+END_OF_TURN_SILENCE_MS = 1000
 START_PADDING_MS = 200
+
+# The language the inbound ASR is pinned to. Left unset, the Live API
+# auto-detects per turn and guesses a script: English spoken with an Indian
+# accent came back as Devanagari ("डू यू सेल एरोप्लेन टेक") and once as Arabic.
+# The model still understood the audio and answered correctly, so this is a
+# transcript-fidelity fix, not an audio one.
+#
+# en-IN is accepted here but NOT by speech_config, which rejects it with
+# "1007 Unsupported language code 'en-IN'" and kills the session on the first
+# turn. The two settings take different language sets, so the agent's *output*
+# language is deliberately left unset (the prompt already fixes what it speaks)
+# and only the *input* transcription is pinned. Verified against the live API
+# for gemini-2.5-flash-native-audio-latest.
+TRANSCRIPTION_LANGUAGE = "en-IN"
+
+
+def _input_transcription() -> Any:
+    """Pins the inbound ASR to one language instead of auto-detecting per turn."""
+    from google.genai import types
+
+    return types.AudioTranscriptionConfig(language_codes=[TRANSCRIPTION_LANGUAGE])
 
 
 def _turn_detection() -> Any:
@@ -38,7 +62,7 @@ def _turn_detection() -> Any:
 
     return types.RealtimeInputConfig(
         automatic_activity_detection=types.AutomaticActivityDetection(
-            end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+            end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
             silence_duration_ms=END_OF_TURN_SILENCE_MS,
             prefix_padding_ms=START_PADDING_MS,
         )
@@ -80,4 +104,8 @@ class GeminiLiveProvider(RealtimeModelProvider):
             voice=voice,
             api_key=self.infra.provider_keys["google"],
             realtime_input_config=_turn_detection(),
+            # Inbound ASR language. This is the setting that stops the script
+            # guessing; speech_config does not affect transcription, and would
+            # reject this value anyway (see TRANSCRIPTION_LANGUAGE).
+            input_audio_transcription=_input_transcription(),
         )

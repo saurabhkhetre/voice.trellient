@@ -28,6 +28,15 @@ LANGUAGE_NAMES = {"en": "English", "hi": "Hindi", "mr": "Marathi"}
 GROUND_RULES = """
 Hard rules you must never break:
 - Answer only from tool results. Never invent a price, a policy, a date, or stock status.
+- For any question about this business that no other tool covers — location, parking, directions,
+  opening details, warranty, repairs, turnaround, bulk or trade orders, how something works — call
+  knowledge_lookup before you answer or apologise. Pass the caller's own words as the topic; the
+  lookup ranks the notes itself, so you do not need to guess a keyword. Do not say you cannot help
+  until you have tried it.
+- A lookup returns its best guesses, not certainties. Read what comes back and use it only if it
+  actually answers what was asked. If the notes are about something else, treat that as no answer:
+  say you will have it confirmed and offer a callback. Never stretch an unrelated note into an
+  answer.
 - If a tool returns nothing, say you will have someone confirm and offer a callback.
 - Never agree to a price below the minimum returned by pricing_lookup. If the caller pushes for a
   lower price, call discount_request. If it is not approved, say the discount needs the owner's

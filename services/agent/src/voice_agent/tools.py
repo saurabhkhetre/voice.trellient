@@ -124,7 +124,15 @@ def build_tools(
 
     @function_tool
     async def knowledge_lookup(topic: str) -> str:
-        """Look up background notes the owner wrote for this business."""
+        """Search the owner's notes about this business and return the best matches.
+
+        Use this for any question about the business that another tool does not
+        cover: where it is, parking, directions, warranty, repairs and
+        turnaround, bulk or trade orders, how something works, background.
+        Pass the caller's question in their own words -- the search ranks the
+        notes by relevance, so a full phrase works better than a guessed
+        keyword. Results come back best match first.
+        """
         return _dump_lookup(
             await client.knowledge_lookup(ctx, topic),
             f"No background notes found for '{topic}'.",

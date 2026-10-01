@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -41,6 +42,9 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/voice")
 public class VoiceController {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(VoiceController.class);
 
     private static final Set<String> ACTIVE_STATUSES = Set.of("ringing", "in_progress");
 
@@ -173,13 +177,32 @@ public class VoiceController {
                     httpUrl(livekitUrl), livekitApiKey, livekitApiSecret);
             var created = rooms.createRoom(roomName, 300, 10, null, roomMetadata, null).execute();
             if (!created.isSuccessful()) {
-                throw new IOException("LiveKit responded " + created.code());
+                // The body carries LiveKit's own explanation (bad key, room
+                // limit, project suspended); the status code alone does not.
+                throw new IOException("LiveKit responded " + created.code()
+                        + " " + created.message() + describeBody(created));
             }
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             call.setStatus("failed");
             call.setEndedAt(OffsetDateTime.now());
             callRepository.save(call);
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not create the voice room.", e);
+
+            // Log it here, at WARN with the cause attached. Throwing a
+            // ResponseStatusException does not log: the exception handler turns
+            // it into a response body and the reason never reaches the log, so a
+            // 502 used to be undiagnosable from the API log alone — the real
+            // cause (a DNS failure reaching livekit.cloud) was only visible in
+            // the Python worker's log, and only because it happened to be up.
+            //
+            // host, not the full URL, and never the key or secret.
+            log.warn("Could not create LiveKit room {} for call {} at {}: {}",
+                    roomName, call.getId(), hostOf(livekitUrl), e.toString(), e);
+
+            // RuntimeException here is a client or transport fault, not a bug in
+            // this handler, so it is still a 502 rather than a 500.
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Could not reach the voice service to create the room ("
+                            + rootCauseSummary(e) + "). The call was not started.", e);
         }
 
         // The browser publishes its microphone and reads the agent's attributes,
@@ -218,5 +241,48 @@ public class VoiceController {
     /** RoomServiceClient speaks HTTP(S); LiveKit project URLs are usually ws(s)://. */
     private static String httpUrl(String url) {
         return url.replaceFirst("^ws", "http");
+    }
+
+    /**
+     * The host being dialled, for the log. Deliberately not the whole URL and
+     * never the API key or secret: this line goes to shared log storage.
+     */
+    private static String hostOf(String url) {
+        if (url == null) return "unknown";
+        try {
+            String host = URI.create(httpUrl(url)).getHost();
+            return host == null ? "unknown" : host;
+        } catch (IllegalArgumentException e) {
+            return "unparseable";
+        }
+    }
+
+    /**
+     * A short, safe summary of why this failed, for the response body. The
+     * exception type and message are LiveKit's or the JDK's, and carry no
+     * credentials — but the body is deliberately kept to the class name plus the
+     * cause's message so a future SDK change cannot leak a request URL with a
+     * token in it into a browser response.
+     */
+    private static String rootCauseSummary(Throwable error) {
+        Throwable root = error;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String name = root.getClass().getSimpleName();
+        String message = root.getMessage();
+        if (message == null || message.isBlank()) return name;
+        String trimmed = message.length() > 120 ? message.substring(0, 120) + "..." : message;
+        return name + ": " + trimmed;
+    }
+
+    /** LiveKit's error body, when it sent one. Read once; it is not replayable. */
+    private static String describeBody(retrofit2.Response<?> response) {
+        try (var body = response.errorBody()) {
+            if (body == null) return "";
+            String text = body.string();
+            if (text.isBlank()) return "";
+            return " - " + (text.length() > 200 ? text.substring(0, 200) + "..." : text);
+        } catch (IOException e) {
+            return "";
+        }
     }
 }

@@ -50,20 +50,19 @@ const LANGUAGES = [
   { value: "mr", label: "Marathi (mr-IN)" },
 ];
 
-const MODELS = [
-  { value: "gpt-realtime", label: "OpenAI gpt-realtime" },
-  { value: "gpt-realtime-mini", label: "OpenAI gpt-realtime mini (lower cost)" },
-  { value: "gemini-2.5-flash-native-audio-latest", label: "Gemini 2.5 Flash native audio" },
-  { value: "gemini-3.1-flash-live-preview", label: "Gemini 3.1 Flash Live (preview)" },
-];
-
-// Values must match the agent worker's provider registry (voice_agent/providers).
-const PROVIDERS = [
-  { value: "openai_realtime", label: "OpenAI Realtime" },
-  { value: "gemini_live", label: "Gemini Live" },
-];
-
-const VOICES = ["alloy", "echo", "shimmer", "verse", "sage", "coral"];
+// Providers, models and voices come from GET /api/agents/voice-catalog rather
+// than a list here. A second copy in the dashboard is what let a Gemini model be
+// saved on an OpenAI agent twice: the flat model list offered every model to
+// every provider, and the voice list only ever held OpenAI voices, so a Gemini
+// agent had no valid voice to choose. The API rejects a bad combination on save
+// too, so this only decides what is offered.
+type VoiceOption = { value: string; label: string };
+type VoiceProvider = {
+  value: string;
+  label: string;
+  models: VoiceOption[];
+  voices: VoiceOption[];
+};
 
 const TABS = [
   "Prompt",
@@ -81,6 +80,15 @@ function VoiceAgentDashboard() {
   const businessId = ctx?.business.id;
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["agent-configs", businessId], [businessId]);
+
+  // Static capability list, so it can be cached for the session.
+  const catalog = useQuery({
+    queryKey: ["voice-catalog", businessId],
+    enabled: Boolean(businessId),
+    staleTime: Infinity,
+    queryFn: () =>
+      apiGet<VoiceProvider[]>("/agents/voice-catalog", { businessId: businessId! }),
+  });
 
   const agents = useQuery({
     queryKey,
@@ -165,6 +173,16 @@ function VoiceAgentDashboard() {
 
   const set = (key: string, value: unknown) => setDraft((d) => ({ ...d, [key]: value }));
   const str = (key: string) => (draft[key] == null ? "" : String(draft[key]));
+
+  // The Model & voice tab offers only what the selected provider can run. The
+  // catalog is authoritative (GET /api/agents/voice-catalog) and the API
+  // re-checks the combination on save, so this is about not offering a choice
+  // that cannot work — not the last line of defence.
+  const providers = catalog.data ?? [];
+  const providerValue = str("model_provider") || providers[0]?.value || "";
+  const activeProvider = providers.find((p) => p.value === providerValue);
+  const modelValue = str("model_name") || activeProvider?.models[0]?.value || "";
+  const voiceValue = str("voice_name") || activeProvider?.voices[0]?.value || "";
   const bool = (key: string) => Boolean(draft[key]);
 
   if (!ctx || agents.isLoading) {
@@ -324,28 +342,53 @@ function VoiceAgentDashboard() {
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field label="Provider">
                       <select
-                        value={str("model_provider") || "openai_realtime"}
-                        onChange={(e) => set("model_provider", e.target.value)}
+                        value={providerValue}
+                        onChange={(e) => {
+                          // Switching provider invalidates the model and voice,
+                          // so move them to the new provider's defaults in the
+                          // same edit. Leaving them behind is what produced
+                          // gpt-realtime on gemini_live.
+                          const next = providers.find((p) => p.value === e.target.value);
+                          set("model_provider", e.target.value);
+                          if (next) {
+                            set("model_name", next.models[0]?.value ?? "");
+                            set("voice_name", next.voices[0]?.value ?? "");
+                          }
+                        }}
                         className="input-base"
+                        disabled={!providers.length}
                       >
-                        {PROVIDERS.map((p) => (
+                        {providers.map((p) => (
                           <option key={p.value} value={p.value}>
                             {p.label}
                           </option>
                         ))}
                       </select>
                     </Field>
-                    <Field label="Realtime model">
+                    <Field
+                      label="Realtime model"
+                      help={
+                        activeProvider
+                          ? `Models ${activeProvider.label} can run.`
+                          : "Loading the model list…"
+                      }
+                    >
                       <select
-                        value={str("model_name") || MODELS[0]!.value}
+                        value={modelValue}
                         onChange={(e) => set("model_name", e.target.value)}
                         className="input-base"
+                        disabled={!activeProvider}
                       >
-                        {MODELS.map((m) => (
+                        {(activeProvider?.models ?? []).map((m) => (
                           <option key={m.value} value={m.value}>
                             {m.label}
                           </option>
                         ))}
+                        {/* A value saved before this list existed, or by a
+                            direct API call, would otherwise render as blank. */}
+                        {modelValue && !activeProvider?.models.some((m) => m.value === modelValue) ? (
+                          <option value={modelValue}>{modelValue} — not supported</option>
+                        ) : null}
                       </select>
                     </Field>
                     <Field label="Primary language">
@@ -363,15 +406,19 @@ function VoiceAgentDashboard() {
                     </Field>
                     <Field label="Voice">
                       <select
-                        value={str("voice_name") || VOICES[0]!}
+                        value={voiceValue}
                         onChange={(e) => set("voice_name", e.target.value)}
                         className="input-base"
+                        disabled={!activeProvider}
                       >
-                        {VOICES.map((v) => (
-                          <option key={v} value={v}>
-                            {v}
+                        {(activeProvider?.voices ?? []).map((v) => (
+                          <option key={v.value} value={v.value}>
+                            {v.label}
                           </option>
                         ))}
+                        {voiceValue && !activeProvider?.voices.some((v) => v.value === voiceValue) ? (
+                          <option value={voiceValue}>{voiceValue} — not supported</option>
+                        ) : null}
                       </select>
                     </Field>
                     <Field label="Speaking rate" help="1.0 is a natural pace.">

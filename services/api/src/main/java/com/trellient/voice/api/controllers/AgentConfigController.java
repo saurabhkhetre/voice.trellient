@@ -4,6 +4,7 @@ import com.trellient.voice.api.access.AccessService;
 import com.trellient.voice.api.security.UserPrincipal;
 import com.trellient.voice.api.web.Rows;
 import com.trellient.voice.api.web.Validate;
+import com.trellient.voice.api.web.VoiceCatalog;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -122,6 +123,22 @@ public class AgentConfigController {
         return Map.of("version", version);
     }
 
+    /**
+     * The providers the dashboard may offer, each with the models and voices
+     * that provider accepts. The Model & voice tab builds its dropdowns from
+     * this rather than its own copy: two lists that can drift are what let a
+     * Gemini model be saved on an OpenAI agent twice.
+     *
+     * Membership is enough to read it — it is a static capability list, not
+     * workspace data.
+     */
+    @GetMapping("/voice-catalog")
+    public List<VoiceCatalog.Provider> voiceCatalog(@AuthenticationPrincipal UserPrincipal user,
+                                                    @RequestParam String businessId) {
+        access.requireBusinessMembership(user.getId(), Validate.uuid(businessId, "businessId"));
+        return VoiceCatalog.providers();
+    }
+
     /** Live per-agent state, derived from the last 24 hours of calls. */
     @GetMapping("/runtime")
     public Map<String, Map<String, Object>> runtime(@AuthenticationPrincipal UserPrincipal user,
@@ -194,19 +211,58 @@ public class AgentConfigController {
     private void applyChanges(String agentConfigId, Map<String, Object> changes) {
         List<String> assignments = new ArrayList<>();
         List<Object> params = new ArrayList<>();
+        Map<String, Object> parsed = new LinkedHashMap<>();
 
         for (Editable field : EDITABLE) {
             if (!changes.containsKey(field.column())) continue;
             Object value = field.parse(changes.get(field.column()));
             if (value == Editable.SKIP) continue;
+            parsed.put(field.column(), value);
             assignments.add(field.column() + " = ?");
             params.add(value);
         }
         if (assignments.isEmpty()) return;
 
+        requireRunnableVoiceConfig(agentConfigId, parsed);
+
         params.add(agentConfigId);
         jdbc.update("UPDATE agent_configs SET " + String.join(", ", assignments)
                 + ", updated_at = now() WHERE id = ?::uuid", params.toArray());
+    }
+
+    /**
+     * Rejects a provider/model/voice combination the agent worker cannot run.
+     *
+     * Each field is valid on its own, so this has to look at them together —
+     * and against what is already stored, because a patch usually carries only
+     * the field that changed. Sending model_name alone is exactly how
+     * gpt-realtime ended up on a gemini_live agent: per-field validation passed
+     * and the call died on the first turn with "1007 Unsupported".
+     */
+    private void requireRunnableVoiceConfig(String agentConfigId, Map<String, Object> parsed) {
+        boolean touchesVoiceConfig = parsed.containsKey("model_provider")
+                || parsed.containsKey("model_name")
+                || parsed.containsKey("voice_name");
+        if (!touchesVoiceConfig) return;
+
+        Map<String, Object> current = jdbc.queryForMap(
+                "SELECT model_provider, model_name, voice_name FROM agent_configs WHERE id = ?::uuid",
+                agentConfigId);
+
+        String provider = effective(parsed, current, "model_provider");
+        String model = effective(parsed, current, "model_name");
+        String voice = effective(parsed, current, "voice_name");
+
+        // A row with no provider yet runs on the worker's own default, and this
+        // patch is not making that worse, so leave it to the worker.
+        if (provider == null) return;
+        VoiceCatalog.requireValidCombination(provider, model, voice);
+    }
+
+    /** The value this patch will leave in the column: the new one, else the stored one. */
+    private static String effective(Map<String, Object> parsed, Map<String, Object> current, String column) {
+        Object value = parsed.containsKey(column) ? parsed.get(column) : current.get(column);
+        return value instanceof String s && !s.isBlank() ? s : null;
     }
 
     private static String str(Object value) {
@@ -277,8 +333,9 @@ public class AgentConfigController {
                 case PROVIDER -> {
                     if (!(raw instanceof String s)) throw Validate.bad("model_provider must be text.");
                     String resolved = PROVIDER_ALIASES.getOrDefault(s, s);
-                    if (!resolved.equals("openai_realtime") && !resolved.equals("gemini_live")) {
-                        throw Validate.bad("model_provider must be openai_realtime or gemini_live.");
+                    if (!VoiceCatalog.isProvider(resolved)) {
+                        throw Validate.bad("model_provider must be one of: "
+                                + String.join(", ", VoiceCatalog.providerValues()) + ".");
                     }
                     yield resolved;
                 }

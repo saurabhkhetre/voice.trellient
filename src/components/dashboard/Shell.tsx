@@ -251,31 +251,17 @@ const LazyConductorPanel = lazy(() =>
   Promise.resolve({ default: ConductorPanel }),
 );
 
+/**
+ * Conductor is not built. This panel describes what it is meant to do and
+ * stops there.
+ *
+ * It used to hold a chat box that, on send, waited 800ms and appended a canned
+ * reply -- "I'll analyze <url> to understand your business. Give me a moment to
+ * read the site..." -- with nothing behind it. No request was made, no site was
+ * read, and the next message never came. Anyone who pasted a URL was left
+ * waiting on an analysis that was never going to happen.
+ */
 function ConductorPanel({ onClose }: { onClose: () => void }) {
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string }[]>([
-    { role: "assistant", text: "Hi! I'm Conductor, your AI assistant. Paste a website URL or describe the agent you want to build, and I'll help you set it up." },
-  ]);
-
-  function send() {
-    if (!input.trim()) return;
-    const userMsg = input.trim();
-    setMessages((m) => [...m, { role: "user", text: userMsg }]);
-    setInput("");
-    // Simulate an assistant response
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          text: userMsg.includes("http")
-            ? `I'll analyze ${userMsg} to understand your business. Give me a moment to read the site and suggest an agent configuration…`
-            : "I can help with that! Let me draft a prompt and configuration for your agent based on what you described.",
-        },
-      ]);
-    }, 800);
-  }
-
   return (
     <aside className="sticky top-0 hidden h-screen w-[22rem] shrink-0 flex-col border-l border-line bg-card lg:flex">
       <div className="flex items-center justify-between border-b border-line px-5 py-4">
@@ -288,34 +274,19 @@ function ConductorPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div key={i} className={cn("text-[0.88rem] leading-relaxed", msg.role === "user" ? "text-ink" : "text-muted-foreground")}>
-            <span className="mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.18em]">
-              {msg.role === "user" ? "You" : "Conductor"}
-            </span>
-            {msg.text}
-          </div>
-        ))}
-      </div>
-
-      <div className="border-t border-line p-4">
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Paste a URL or describe your agent…"
-            className="min-w-0 flex-1 rounded-[8px] border border-line bg-background px-3 py-2 text-[0.88rem] outline-none focus:border-ink"
-          />
-          <button
-            type="button"
-            onClick={send}
-            className="rounded-[8px] bg-primary px-3 py-2 text-[0.82rem] font-medium text-primary-foreground"
-          >
-            Send
-          </button>
-        </div>
+      <div className="flex-1 overflow-y-auto px-5 py-6">
+        <Pill tone="neutral">Not available yet</Pill>
+        <p className="mt-4 text-[0.88rem] leading-relaxed text-muted-foreground">
+          Conductor is planned as a way to set an agent up by describing it, or
+          by pointing it at your website and letting it read the site to draft a
+          prompt and configuration.
+        </p>
+        <p className="mt-3 text-[0.88rem] leading-relaxed text-muted-foreground">
+          It is not built, so there is nothing to type into yet. In the meantime
+          the same settings are all editable by hand under{" "}
+          <span className="text-ink">Agents</span> — prompt, voice, guardrails
+          and tools.
+        </p>
       </div>
     </aside>
   );

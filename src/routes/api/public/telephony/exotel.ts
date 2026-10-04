@@ -151,26 +151,13 @@ export const Route = createFileRoute("/api/public/telephony/exotel")({
           return json({ error: "Could not record the call" }, 500);
         }
 
-        // The agent reads business context from room metadata, so create the
-        // room up front. Best effort: the LiveKit SIP dispatch rule must route
-        // the caller into this same room name.
-        try {
-          const { createRoom } = await import("@/lib/livekit/sip");
-          await createRoom(inbound.roomName, {
-            business_id: businessId,
-            agent_config_id: agentConfigId,
-            call_id: callId,
-            caller_number: inbound.callerNumber,
-            provider: provider.name,
-            mode: "inbound",
-          });
-        } catch {
-          // LiveKit not configured, or the room already exists — the call can still connect.
-        }
-
+        // No room is created here. The LiveKit dispatch rule names the room
+        // when the INVITE arrives (see ROOM_NAMING in lib/livekit/sip.ts), and
+        // a room created under a guessed name would simply sit empty while the
+        // caller waited in the real one. The agent resolves its own context
+        // from the dialled number instead.
         return json({
           action: "connect",
-          room: inbound.roomName,
           call_id: callId,
           business_id: businessId,
           agent_config_id: agentConfigId,

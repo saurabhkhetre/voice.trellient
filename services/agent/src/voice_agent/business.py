@@ -158,6 +158,45 @@ class BusinessClient:
 
     # ---------- context loading ----------
 
+    async def resolve_by_dialled_number(self, number: str) -> dict[str, Any] | None:
+        """Finds the workspace and agent that own a dialled number.
+
+        On an inbound SIP call nothing hands the agent its context: LiveKit
+        names the room and the webhook does not know that name in advance (see
+        ROOM_NAMING in src/lib/livekit/sip.ts). The dialled number arrives on
+        the SIP participant instead, and it is enough to find everything else.
+
+        Mirrors the resolution the Exotel webhook does, including the fallback
+        to businesses.phone, so the two cannot disagree about who owns a
+        number. Returns None when the number belongs to nobody.
+        """
+        row = await self.conn.fetchrow(
+            """SELECT business_id::text AS business_id, agent_config_id::text AS agent_config_id
+               FROM phone_numbers
+               WHERE phone_number = $1 AND active
+               LIMIT 1""",
+            number,
+        )
+        if row is None:
+            row = await self.conn.fetchrow(
+                "SELECT id::text AS business_id, NULL::text AS agent_config_id"
+                " FROM businesses WHERE phone = $1 LIMIT 1",
+                number,
+            )
+        if row is None:
+            return None
+
+        result = dict(row)
+        if not result.get("agent_config_id"):
+            fallback = await self.conn.fetchval(
+                """SELECT id::text FROM agent_configs
+                   WHERE business_id = $1::uuid AND enabled
+                   ORDER BY created_at ASC LIMIT 1""",
+                result["business_id"],
+            )
+            result["agent_config_id"] = fallback
+        return result
+
     async def load_context(
         self,
         business_id: str,

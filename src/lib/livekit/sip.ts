@@ -8,7 +8,7 @@
  * All operations are server-side only — never imported by the browser.
  */
 
-import { RoomServiceClient } from "livekit-server-sdk";
+import { RoomServiceClient, SipClient } from "livekit-server-sdk";
 
 /**
  * Gets a configured RoomServiceClient, or null if LiveKit is not configured.
@@ -88,12 +88,99 @@ export interface InboundTrunkConfig {
 export interface DispatchRuleConfig {
   /** The trunk IDs this rule applies to. */
   trunkIds: string[];
-  /** Room name prefix — actual room name will be {prefix}-{callId}. */
+  /** Room name prefix. LiveKit appends the callee number and a random suffix. */
   roomPrefix: string;
-  /** Maximum call duration in seconds. */
-  maxCallDuration?: number;
-  /** Metadata to attach to the room (agent_config_id, business_id, etc). */
+  /** Metadata to attach to the room (static only — see ROOM_NAMING below). */
   metadata?: Record<string, unknown>;
+}
+
+/**
+ * ROOM NAMING — the contract between the caller's SIP leg and the agent.
+ *
+ * LiveKit names the room, and nothing else tries to predict that name.
+ *
+ * A `callee` dispatch rule with `randomize: true` produces
+ * `call-<callee number>-<random>`, so two people ringing the same business
+ * number get two rooms instead of being dropped into one and hearing each
+ * other. The cost is that the name is not knowable ahead of the INVITE.
+ *
+ * So the agent does not receive its context in room metadata on an inbound
+ * call. It reads the dialled number off the SIP participant
+ * (`sip.trunkPhoneNumber`) and looks the workspace up itself. The webhook
+ * records the call row and nothing more.
+ *
+ * The alternative — `randomize: false`, giving a deterministic
+ * `call-<number>` that both sides can compute — was rejected: it only works
+ * while a business never has two calls at once, and the failure is two
+ * strangers in the same conversation.
+ */
+export const SIP_ROOM_PREFIX = "call";
+
+/** Creates a SIP client, or null when LiveKit is not configured. */
+function getSipClient(): SipClient | null {
+  const url = process.env["LIVEKIT_URL"];
+  const apiKey = process.env["LIVEKIT_API_KEY"];
+  const apiSecret = process.env["LIVEKIT_API_SECRET"];
+  if (!url || !apiKey || !apiSecret) return null;
+  return new SipClient(url.replace(/^ws/, "http"), apiKey, apiSecret);
+}
+
+/**
+ * Creates the inbound trunk that accepts calls from the carrier.
+ *
+ * `allowedAddresses` is the security boundary: without it the trunk answers
+ * SIP from anywhere on the internet, and anyone who learns the URI can place
+ * calls that run the agent on your account.
+ *
+ * Returns the trunk id to put in LIVEKIT_SIP_INBOUND_TRUNK_ID.
+ */
+export async function createInboundTrunk(config: InboundTrunkConfig): Promise<string> {
+  const sip = getSipClient();
+  if (!sip) throw new Error("LiveKit is not configured.");
+  if (config.allowedAddresses.length === 0) {
+    throw new Error(
+      "An inbound trunk needs allowedAddresses, or it accepts SIP from anywhere.",
+    );
+  }
+
+  const trunk = await sip.createSipInboundTrunk(config.name, config.allowedNumbers, {
+    allowedAddresses: config.allowedAddresses,
+    ...(config.authUsername ? { authUsername: config.authUsername } : {}),
+    ...(config.authPassword ? { authPassword: config.authPassword } : {}),
+  });
+  return trunk.sipTrunkId;
+}
+
+/**
+ * Creates the dispatch rule that puts an inbound call into a room.
+ *
+ * See ROOM_NAMING above for why this is `callee` + randomize rather than a
+ * fixed or predictable name.
+ */
+export async function createDispatchRule(config: DispatchRuleConfig): Promise<string> {
+  const sip = getSipClient();
+  if (!sip) throw new Error("LiveKit is not configured.");
+
+  const rule = await sip.createSipDispatchRule(
+    { type: "callee", roomPrefix: config.roomPrefix, randomize: true },
+    {
+      trunkIds: config.trunkIds,
+      name: `${config.roomPrefix} inbound`,
+      ...(config.metadata ? { metadata: JSON.stringify(config.metadata) } : {}),
+    },
+  );
+  return rule.sipDispatchRuleId;
+}
+
+/** Existing inbound trunks and dispatch rules, for idempotent setup. */
+export async function listInboundTrunks() {
+  const sip = getSipClient();
+  return sip ? sip.listSipInboundTrunk() : [];
+}
+
+export async function listDispatchRules() {
+  const sip = getSipClient();
+  return sip ? sip.listSipDispatchRule() : [];
 }
 
 /**

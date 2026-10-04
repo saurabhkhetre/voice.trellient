@@ -82,6 +82,26 @@ def read_job_metadata(ctx: JobContext) -> dict[str, Any]:
     return {}
 
 
+def read_sip_attributes(ctx: JobContext) -> dict[str, str]:
+    """The dialled and calling numbers off the SIP participant, if this is a phone call.
+
+    LiveKit puts these on the participant that carries the carrier's leg:
+    `sip.trunkPhoneNumber` is the number the caller dialled (ours),
+    `sip.phoneNumber` is theirs. A browser call has neither.
+    """
+    for participant in ctx.room.remote_participants.values():
+        attributes = getattr(participant, "attributes", None) or {}
+        dialled = attributes.get("sip.trunkPhoneNumber")
+        if not dialled:
+            continue
+        found = {"dialled_number": dialled}
+        caller = attributes.get("sip.phoneNumber")
+        if caller:
+            found["caller_number"] = caller
+        return found
+    return {}
+
+
 class ConversationManager:
     """Owns one realtime conversation: session start, greeting, teardown."""
 
@@ -102,17 +122,40 @@ class ConversationManager:
     async def load_business(self, ctx: JobContext) -> BusinessContext | None:
         """Loads business data for this call. Returns None when unconfigured."""
         metadata = read_job_metadata(ctx)
+        try:
+            self.client = BusinessClient()
+            await self.client.connect()
+        except Exception as exc:  # noqa: BLE001 - degrade gracefully
+            log_event(logger, "business.load_failed", detail=type(exc).__name__)
+            return None
+
+        # A browser test call carries its context in room metadata. An inbound
+        # phone call does not -- LiveKit named the room, so nobody could attach
+        # metadata to it beforehand -- and brings the dialled number on the SIP
+        # participant instead.
+        sip = read_sip_attributes(ctx)
+        if not metadata.get("business_id") and sip.get("dialled_number"):
+            resolved = await self.client.resolve_by_dialled_number(sip["dialled_number"])
+            if resolved:
+                metadata = {**metadata, **resolved}
+                log_event(
+                    logger,
+                    "business.resolved_from_sip",
+                    dialled=sip["dialled_number"],
+                    business_id=resolved.get("business_id"),
+                )
+            else:
+                log_event(logger, "business.unknown_number", dialled=sip["dialled_number"])
+
         business_id = metadata.get("business_id") or os.environ.get("DEFAULT_BUSINESS_ID")
         if not business_id:
             log_event(logger, "business.not_linked", room=ctx.room.name)
             return None
         try:
-            self.client = BusinessClient()
-            await self.client.connect()
             business = await self.client.load_context(
                 business_id,
                 call_id=metadata.get("call_id"),
-                caller_number=metadata.get("caller_number"),
+                caller_number=metadata.get("caller_number") or sip.get("caller_number"),
                 agent_config_id=metadata.get("agent_config_id"),
             )
         except (BusinessDataError, Exception) as exc:  # noqa: BLE001 - degrade gracefully

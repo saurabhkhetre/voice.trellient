@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Phone, BookOpen, PhoneOutgoing, History, BarChart3 } from "lucide-react";
+import { Bot, Phone, BookOpen, PhoneOutgoing, History, BarChart3, ArrowRight } from "lucide-react";
 
-import { PageHeader, Panel, StatCard } from "@/components/dashboard/Shell";
+import { EmptyState, PageHeader, Panel, Pill, StatCard } from "@/components/dashboard/Shell";
 import { apiGet } from "@/lib/api/client";
 // Types only — the server functions stay in place until this page is confirmed
 // on Spring, and importing them keeps both response shapes checked in step.
@@ -54,60 +54,109 @@ function DashboardHome() {
         description="Overview of your voice agent platform."
       />
 
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Calls Today" value={d ? String(d.callsToday) : "—"} />
-        <StatCard label="Active Calls" value={d ? String(d.activeCalls) : "—"} hint="In progress now" />
-        <StatCard label="Active Agents" value={d ? String(d.activeAgents) : "—"} hint="Enabled configs" />
-        <StatCard label="Open Escalations" value={d ? String(d.openEscalations) : "—"} />
+      {/* Metrics. Staggered in at 40ms intervals — enough to read as a
+          sequence, short enough that the row is settled before the eye
+          arrives. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Calls Today", value: d ? String(d.callsToday) : "—", tone: "neutral" as const },
+          { label: "Active Calls", value: d ? String(d.activeCalls) : "—", hint: "In progress now", tone: "live" as const },
+          { label: "Active Agents", value: d ? String(d.activeAgents) : "—", hint: "Enabled configs", tone: "neutral" as const },
+          { label: "Open Escalations", value: d ? String(d.openEscalations) : "—", hint: "Awaiting a human", tone: "warn" as const },
+        ].map((card, i) => (
+          <div key={card.label} className="stagger-in" style={{ animationDelay: `${i * 40}ms` }}>
+            <StatCard {...card} />
+          </div>
+        ))}
       </div>
 
-      {/* Quick actions */}
-      <div className="mt-8">
-        <h2 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Quick Actions</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {QUICK_ACTIONS.map((a) => (
+      {/* Below the metrics the page splits: recent activity is the thing you
+          came to read, so it takes the wide column; actions sit beside it. */}
+      <div className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <section>
+          <div className="mb-4 flex items-baseline justify-between gap-4">
+            <h2 className="label-caps">Recent Calls</h2>
             <Link
-              key={a.to}
-              to={a.to}
-              className="flex items-center gap-3 rounded-[12px] border border-line bg-card px-5 py-4 text-[0.9rem] font-medium text-ink transition-colors hover:bg-secondary"
+              to="/dashboard/call-history"
+              className="group inline-flex items-center gap-1 text-small text-text-secondary transition-colors duration-[130ms] hover:text-text-primary"
             >
-              <a.icon className="size-5 shrink-0 text-muted-foreground" />
-              {a.label}
+              View all
+              <ArrowRight className="size-3.5 transition-transform duration-[130ms] group-hover:translate-x-0.5" />
             </Link>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* Recent calls */}
-      <div className="mt-8">
-        <h2 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Recent Calls</h2>
-        <Panel className="mt-4">
-          {calls.length === 0 ? (
-            <p className="px-5 py-10 text-center text-[0.9rem] text-muted-foreground">
-              No calls yet. Deploy an agent to start receiving calls.
-            </p>
-          ) : (
-            <ul className="divide-y divide-line/70">
-              {calls.map((call) => (
-                <li key={call.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                  <div className="min-w-0">
-                    <p className="text-[0.92rem] text-ink">
-                      {call.customerName ?? call.callerNumber ?? "Web test call"}
-                    </p>
-                    <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                      {formatDateTime(call.startedAt)} · {formatDuration(call.durationSeconds)}
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full border border-line px-2.5 py-0.5 text-[0.72rem] font-medium text-muted-foreground">
-                    {call.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+          <Panel className="overflow-hidden">
+            {recentCalls.isLoading ? (
+              /* Skeleton rows rather than a spinner: the layout does not jump
+                 when the data lands. */
+              <ul className="divide-y divide-line">
+                {[0, 1, 2, 3].map((i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 px-5 py-[0.95rem]">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="h-3 w-40 animate-pulse rounded bg-surface-overlay" />
+                      <div className="h-2.5 w-28 animate-pulse rounded bg-surface-overlay" />
+                    </div>
+                    <div className="h-4 w-16 animate-pulse rounded-full bg-surface-overlay" />
+                  </li>
+                ))}
+              </ul>
+            ) : calls.length === 0 ? (
+              <EmptyState>No calls yet. Deploy an agent to start receiving calls.</EmptyState>
+            ) : (
+              <ul className="divide-y divide-line">
+                {calls.map((call) => (
+                  <li
+                    key={call.id}
+                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-[0.95rem] transition-colors duration-[130ms] hover:bg-surface-overlay"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-overlay">
+                        <Phone className="size-3.5 text-text-tertiary" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-small font-medium text-text-primary">
+                          {call.customerName ?? call.callerNumber ?? "Web test call"}
+                        </p>
+                        <p className="mt-0.5 text-micro text-text-tertiary" data-numeric>
+                          {formatDateTime(call.startedAt)} · {formatDuration(call.durationSeconds)}
+                        </p>
+                      </div>
+                    </div>
+                    <Pill tone={statusTone(call.status)}>{call.status}</Pill>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </section>
+
+        <section>
+          <h2 className="label-caps mb-4">Quick Actions</h2>
+          <div className="grid gap-2">
+            {QUICK_ACTIONS.map((a) => (
+              <Link
+                key={a.to}
+                to={a.to}
+                /* Hover lights the edge and the icon, not the whole panel. The
+                   arrow only appears on approach. */
+                className="group surface-interactive flex items-center gap-3 px-4 py-3 text-small font-medium text-text-secondary hover:border-line-strong hover:bg-surface-overlay hover:text-text-primary"
+              >
+                <a.icon className="size-4 shrink-0 text-text-tertiary transition-colors duration-[130ms] group-hover:text-accent-solid" />
+                {a.label}
+                <ArrowRight className="ml-auto size-3.5 shrink-0 text-text-tertiary opacity-0 transition-all duration-[130ms] group-hover:translate-x-0.5 group-hover:opacity-100" />
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
+}
+
+/** Call status → the semantic colour it should read as. */
+function statusTone(status: string): "neutral" | "good" | "warn" | "bad" {
+  if (status === "completed") return "good";
+  if (status === "failed") return "bad";
+  if (status === "in_progress" || status === "ringing") return "warn";
+  return "neutral";
 }

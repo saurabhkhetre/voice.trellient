@@ -18,6 +18,7 @@ import {
   Puzzle,
   Settings,
   Sparkles,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 
@@ -79,11 +80,17 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
     <Link
       to={item.to}
       activeOptions={{ exact: item.to === "/dashboard" }}
-      className="flex items-center gap-2.5 rounded-[8px] px-3 py-2 text-[0.86rem] text-onnavy-muted transition-colors hover:bg-white/[0.07] hover:text-onnavy"
-      activeProps={{ className: "bg-white/[0.1] text-onnavy" }}
+      // The active marker is a violet rail in the gutter plus a one-step
+      // surface lift. A filled pill would spend the accent on navigation,
+      // which needs to stay available for the page's primary action.
+      className="group relative flex items-center gap-2.5 rounded-md py-[0.4rem] pl-3 pr-3 text-small text-text-secondary transition-[color,background-color] duration-[130ms] ease-out hover:bg-surface-overlay hover:text-text-primary"
+      activeProps={{
+        className:
+          "bg-surface-overlay text-text-primary before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-accent-solid",
+      }}
       onClick={onClick}
     >
-      <Icon className="size-[1.05rem] shrink-0" />
+      <Icon className="size-4 shrink-0 opacity-70 transition-opacity duration-[130ms] group-hover:opacity-100" />
       {item.label}
     </Link>
   );
@@ -131,32 +138,37 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-[100rem] gap-0">
         {/* Desktop sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-[15.5rem] shrink-0 flex-col border-r border-line bg-navy px-4 py-6 text-onnavy lg:flex">
-          <Link to="/dashboard" className="flex items-center gap-2.5 px-2">
-            <svg viewBox="0 0 24 24" className="size-5 text-onnavy" fill="none" stroke="currentColor" aria-hidden="true">
-              <path strokeWidth="1.5" d="M3 5h18M12 5v14M6 9.5h12M8 14h8" />
-            </svg>
-            <span className="font-display text-[1.1rem] tracking-tight text-onnavy">Trellient</span>
+        {/* The sidebar sits on the base surface, one step below the content it
+            frames: chrome recedes, content comes forward. */}
+        <aside className="sticky top-0 hidden h-screen w-[var(--sidebar-w)] shrink-0 flex-col border-r border-line bg-surface px-3 py-5 lg:flex">
+          <Link to="/dashboard" className="flex items-center gap-2.5 rounded-md px-2 py-1">
+            <span className="flex size-6 items-center justify-center rounded-[6px] bg-accent-solid">
+              <svg viewBox="0 0 24 24" className="size-[0.95rem] text-white" fill="none" stroke="currentColor" aria-hidden="true">
+                <path strokeWidth="2" strokeLinecap="round" d="M4 6h16M12 6v12M7 10.5h10M9 15h6" />
+              </svg>
+            </span>
+            <span className="text-title text-text-primary">Trellient</span>
           </Link>
 
-          {/* Workspace label */}
-          <div className="mt-5 rounded-[8px] bg-white/[0.06] px-3 py-2">
-            <p className="truncate text-[0.78rem] font-medium text-onnavy">
-              {data?.business.name ?? "Loading…"}
-            </p>
-            <p className="truncate text-[0.68rem] text-onnavy-muted">{data?.email ?? ""}</p>
+          {/* Workspace. The violet dot is the only accent in the chrome. */}
+          <div className="mt-5 flex items-center gap-2.5 rounded-md border border-line bg-surface-raised px-2.5 py-2">
+            <span className="relative flex size-1.5 shrink-0 items-center justify-center">
+              <span className="absolute size-1.5 rounded-full bg-accent-solid pulse-live" />
+              <span className="relative size-1.5 rounded-full bg-accent-solid" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[0.8rem] font-medium leading-tight text-text-primary">
+                {data?.business.name ?? "Loading…"}
+              </p>
+              <p className="truncate text-micro leading-tight text-text-tertiary">{data?.email ?? ""}</p>
+            </div>
           </div>
 
-          <nav
-            aria-label="Dashboard"
-            className="mt-5 flex-1 space-y-1 overflow-y-auto [scrollbar-color:rgb(255_255_255/0.22)_transparent] [scrollbar-width:thin]"
-          >
+          <nav aria-label="Dashboard" className="mt-6 flex-1 space-y-0.5 overflow-y-auto pr-1">
             {DASHBOARD_NAV.map((entry, i) =>
               isGroup(entry) ? (
-                <div key={entry.label} className={cn(i > 0 && "mt-5")}>
-                  <p className="mb-1.5 px-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-onnavy-muted/60">
-                    {entry.label}
-                  </p>
+                <div key={entry.label} className={cn(i > 0 && "mt-6")}>
+                  <p className="label-caps mb-1.5 px-3">{entry.label}</p>
                   <div className="space-y-0.5">
                     {entry.items.map((item) => (
                       <NavLink key={item.to} item={item} />
@@ -169,20 +181,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             )}
           </nav>
 
-          <div className="mt-4 border-t border-white/10 pt-4">
+          <div className="mt-4 space-y-0.5 border-t border-line pt-4">
             <button
               type="button"
               onClick={() => setConductorOpen((v) => !v)}
-              className="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-[0.86rem] text-onnavy-muted transition-colors hover:bg-white/[0.07] hover:text-onnavy"
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-[0.4rem] text-small text-text-secondary transition-colors duration-[130ms] hover:bg-surface-overlay hover:text-text-primary"
             >
-              <Sparkles className="size-4" />
+              <Sparkles className="size-4 opacity-70" />
               Conductor
             </button>
             <button
               type="button"
               onClick={() => void signOut()}
-              className="mt-1 w-full rounded-[8px] px-3 py-2 text-left text-[0.82rem] text-onnavy-muted hover:text-onnavy"
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-[0.4rem] text-left text-small text-text-tertiary transition-colors duration-[130ms] hover:bg-surface-overlay hover:text-text-primary"
             >
+              <LogOut className="size-4 opacity-70" />
               Sign out
             </button>
           </div>
@@ -306,14 +319,12 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
+    <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
       <div>
-        {eyebrow ? <p className="eyebrow text-muted-foreground">{eyebrow}</p> : null}
-        <h1 className="font-display mt-2 text-[1.9rem] leading-tight tracking-tight text-ink md:text-[2.2rem]">
-          {title}
-        </h1>
+        {eyebrow ? <p className="label-caps">{eyebrow}</p> : null}
+        <h1 className="text-display mt-2.5 text-text-primary">{title}</h1>
         {description ? (
-          <p className="measure mt-2 text-[0.95rem] text-muted-foreground">{description}</p>
+          <p className="measure mt-2.5 text-body text-text-secondary">{description}</p>
         ) : null}
       </div>
       {action}
@@ -322,17 +333,50 @@ export function PageHeader({
 }
 
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
-  return (
-    <section className={cn("rounded-[12px] border border-line bg-card", className)}>{children}</section>
-  );
+  return <section className={cn("surface-card", className)}>{children}</section>;
 }
 
-export function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/**
+ * A single metric.
+ *
+ * `tone` tints the value and shows a marker when a number means something is
+ * happening — an active call is not the same kind of zero as calls today.
+ * Figures are tabular so a count ticking 9 → 10 does not shift the card.
+ */
+export function StatCard({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "neutral" | "live" | "warn";
+}) {
+  const isLive = tone === "live" && value !== "0" && value !== "—";
+  const isWarn = tone === "warn" && value !== "0" && value !== "—";
   return (
-    <div className="rounded-[12px] border border-line bg-card px-5 py-5">
-      <p className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-      <p className="font-display mt-3 text-[1.9rem] leading-none tracking-tight text-ink">{value}</p>
-      {hint ? <p className="mt-2 text-[0.8rem] text-muted-foreground">{hint}</p> : null}
+    <div className="surface-interactive group px-5 py-[1.15rem] hover:border-line-strong">
+      <div className="flex items-center gap-2">
+        <p className="label-caps">{label}</p>
+        {isLive ? (
+          <span className="relative flex size-1.5 items-center justify-center">
+            <span className="absolute size-1.5 rounded-full bg-success pulse-live" />
+            <span className="relative size-1.5 rounded-full bg-success" />
+          </span>
+        ) : null}
+      </div>
+      <p
+        data-numeric
+        className={cn(
+          "mt-3 text-[2rem] font-semibold leading-none tracking-[-0.03em]",
+          isWarn ? "text-warn" : "text-text-primary",
+        )}
+      >
+        {value}
+      </p>
+      {hint ? <p className="mt-2 text-micro text-text-tertiary">{hint}</p> : null}
     </div>
   );
 }
@@ -341,11 +385,11 @@ export function Pill({ tone = "neutral", children }: { tone?: "neutral" | "good"
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.72rem] font-medium",
-        tone === "neutral" && "border-line text-muted-foreground",
-        tone === "good" && "border-ink/20 bg-secondary text-ink",
-        tone === "warn" && "border-brass/40 text-brass",
-        tone === "bad" && "border-destructive/40 text-destructive",
+        "inline-flex items-center rounded-full border px-2 py-[0.1rem] text-micro font-medium",
+        tone === "neutral" && "border-line bg-surface-overlay text-text-secondary",
+        tone === "good" && "border-transparent bg-success-wash text-success",
+        tone === "warn" && "border-transparent bg-warn-wash text-warn",
+        tone === "bad" && "border-transparent bg-error-wash text-error",
       )}
     >
       {children}
@@ -354,5 +398,5 @@ export function Pill({ tone = "neutral", children }: { tone?: "neutral" | "good"
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="px-5 py-10 text-center text-[0.9rem] text-muted-foreground">{children}</p>;
+  return <p className="px-5 py-12 text-center text-small text-text-tertiary">{children}</p>;
 }

@@ -5,19 +5,184 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Trellient design system.
- * Palette: deep midnight navy, warm off-white, near-black ink, brass accent.
- * Two families only: Fraunces (display serif) + Satoshi (body/UI).
- * No gradients. Flat color fields. Lattice line motif.
+ * Trellient design system — "Precision Dark".
+ *
+ * Near-black layered surfaces, one electric violet accent spent sparingly, a
+ * single sans (Inter), generous spacing, motion that is fast enough to feel
+ * mechanical rather than animated. Reference points: Linear's precision,
+ * Vercel's restraint.
+ *
+ * Three rules this file exists to enforce:
+ *
+ *   1. Elevation comes from surface lightness, not drop shadows. On a near-black
+ *      ground a shadow is invisible; a lighter surface and a hairline border are
+ *      what read as "raised".
+ *   2. The accent is a highlight, not a decoration. It marks the one thing that
+ *      matters on a screen — the primary action, the live state. If two things
+ *      are violet, neither is.
+ *   3. No pure black and no pure white. #000 flattens the surface scale and #fff
+ *      glares against it; the extremes are reserved so the ramp has somewhere to
+ *      go.
+ *
+ * Everything below is a token. Components reference tokens, never raw values,
+ * so the next palette change is this file only.
  */
 
+/* ========================================================================
+   Tokens
+   ======================================================================== */
+
+:root {
+  /* ---- Surfaces: a 5-step ramp from page ground to highest overlay -----
+     Slightly blue-tinted rather than neutral grey — neutral near-blacks read
+     as dusty next to a violet accent. */
+  --surface-base: #08090c; /* page ground */
+  --surface-raised: #0e1014; /* cards, panels */
+  --surface-overlay: #15181d; /* hover, inset wells */
+  --surface-high: #1c1f26; /* popovers, menus */
+  --surface-highest: #242831; /* tooltips, the top of the stack */
+
+  /* ---- Borders: deliberately low contrast. A visible border on dark is
+     louder than it looks; these are hairlines that define an edge without
+     drawing the eye to it. */
+  --line: #1e2127;
+  --line-strong: #2b2f38;
+  --line-accent: #3a2d6b; /* violet-tinted, for accented edges */
+
+  /* ---- Text: three steps, none of them white ---- */
+  --text-primary: #eceef2;
+  --text-secondary: #969ca8;
+  --text-tertiary: #646b78;
+
+  /* ---- Accent: electric violet ---- */
+  --accent: #7c5cff;
+  --accent-hover: #8f74ff;
+  --accent-active: #6a49f2;
+  --accent-on: #ffffff; /* text on an accent fill */
+  --accent-wash: color-mix(in oklab, var(--accent) 12%, transparent);
+  --accent-wash-strong: color-mix(in oklab, var(--accent) 20%, transparent);
+
+  /* ---- Semantic: each a hue plus a wash for backgrounds ---- */
+  --success: #2fd98b;
+  --success-wash: color-mix(in oklab, var(--success) 14%, transparent);
+  --warn: #f5b544;
+  --warn-wash: color-mix(in oklab, var(--warn) 14%, transparent);
+  --error: #ff5f57;
+  --error-wash: color-mix(in oklab, var(--error) 14%, transparent);
+  --info: #4aa3ff;
+  --info-wash: color-mix(in oklab, var(--info) 14%, transparent);
+
+  /* ---- Radius: tight. Precision reads as small radii; soft corners read as
+     friendly, which is a different product. ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ---- Elevation: a hairline ring plus a shadow that only deepens the
+     separation. The ring does most of the work. ---- */
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --elev-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --elev-3: 0 16px 40px -8px rgb(0 0 0 / 0.6);
+  --glow-accent: 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
+    0 4px 20px -4px color-mix(in oklab, var(--accent) 35%, transparent);
+
+  /* ---- Motion: fast. Anything over ~200ms on an interface control feels
+     like the app is thinking. The easing is a sharp out-curve so movement
+     starts immediately and settles. ---- */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-instant: 80ms;
+  --dur-fast: 130ms;
+  --dur-base: 190ms;
+  --dur-slow: 300ms;
+
+  /* ---- Layout rhythm ---- */
+  --gutter: 1.5rem;
+  --gutter-lg: 2.5rem;
+  --sidebar-w: 15.5rem;
+
+  /* ====================================================================
+     Legacy aliases.
+
+     The dashboard was built against an earlier light palette (ink / line /
+     card / navy / brass / onnavy). Every page uses those names semantically
+     rather than hardcoding colour, so remapping them here moves the whole
+     app onto the dark surfaces at once and keeps the twelve pages that have
+     not been redesigned yet readable and coherent.
+
+     New work should use the tokens above. These stay until the last page is
+     converted, then go.
+     ==================================================================== */
+  --radius: var(--radius-md);
+  --ink: var(--text-primary);
+  --paper: var(--surface-base);
+  --navy: var(--surface-raised);
+  --navy-deep: var(--surface-base);
+  --brass: var(--accent);
+  --brass-hover: var(--accent-hover);
+  --onnavy: var(--text-primary);
+  --onnavy-muted: var(--text-secondary);
+
+  --background: var(--surface-base);
+  --foreground: var(--text-primary);
+  --card: var(--surface-raised);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-high);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-on);
+  --secondary: var(--surface-overlay);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-overlay);
+  --muted-foreground: var(--text-secondary);
+  --accent-foreground: var(--accent-on);
+  --destructive: var(--error);
+  --destructive-foreground: #ffffff;
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--accent);
+}
+
+/* ========================================================================
+   Tailwind theme bridge
+   ======================================================================== */
+
 @theme inline {
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 6px;
-  --radius-xl: 6px;
-  --radius-2xl: 6px;
-  --radius-3xl: 6px;
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-xl);
+  --radius-3xl: var(--radius-xl);
+
+  /* Surfaces, text, accent, semantic — the names new code should reach for. */
+  --color-surface: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-high: var(--surface-high);
+  --color-surface-highest: var(--surface-highest);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-accent-solid: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-wash: var(--accent-wash);
+  --color-line-accent: var(--line-accent);
+
+  --color-success: var(--success);
+  --color-success-wash: var(--success-wash);
+  --color-warn: var(--warn);
+  --color-warn-wash: var(--warn-wash);
+  --color-error: var(--error);
+  --color-error-wash: var(--error-wash);
+  --color-info: var(--info);
+  --color-info-wash: var(--info-wash);
+
+  /* Legacy names, still referenced by the pages awaiting conversion. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,101 +212,215 @@
   --color-line-strong: var(--line-strong);
   --color-onnavy: var(--onnavy);
   --color-onnavy-muted: var(--onnavy-muted);
+
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
+
+  --ease-out: var(--ease-out);
+  --animate-duration-fast: var(--dur-fast);
 }
 
-:root {
-  --radius: 2px;
-
-  /* navy on warm paper: deep navy chrome, royal-blue actions, dark navy ink */
-  --navy: #10264a;
-  --navy-deep: #0a1a36;
-  --paper: #f7f6f2;
-  --ink: #1a2b4c;
-  --brass: #2f64d6;
-  --brass-hover: #1f4fbd;
-
-  --background: var(--paper);
-  --foreground: var(--ink);
-  --card: #fdfcfa;
-  --card-foreground: var(--ink);
-  --popover: #fdfcfa;
-  --popover-foreground: var(--ink);
-  --primary: #1f4fbd;
-  --primary-foreground: #ffffff;
-  --secondary: #f1edec;
-  --secondary-foreground: var(--ink);
-  --muted: #f1edec;
-  --muted-foreground: #5f5e5e;
-  --accent: #1f4fbd;
-  --accent-foreground: #ffffff;
-  --destructive: oklch(0.52 0.18 27.3);
-  --destructive-foreground: #fdfcfa;
-  --border: #e5e2e1;
-  --input: #d6d3d1;
-  --ring: #2f64d6;
-
-  --line: #e5e2e1;
-  --line-strong: #c8c6c5;
-  --onnavy: #fdf8f8;
-  --onnavy-muted: #a7b5cf;
-}
+/* ========================================================================
+   Base
+   ======================================================================== */
 
 @layer base {
   * {
-    border-color: var(--color-border);
-  }
-
-  html {
-    /* scroll-behavior: smooth removed — conflicts with TanStack Router scroll restoration */
+    border-color: var(--line);
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: var(--surface-base);
+    color: var(--text-primary);
     font-family: var(--font-sans);
-    font-size: 1.0625rem;
+    font-size: 0.9375rem;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Inter's contextual alternates and disambiguated glyphs. The precision
+       look depends on the single-storey "a" and straight-sided "l". */
+    font-feature-settings: "cv05" 1, "cv08" 1, "ss03" 1;
+    text-rendering: optimizeLegibility;
   }
 
+  /* Headings carry negative tracking that tightens as they get larger —
+     optical correction, not a style choice: Inter opens up at display sizes. */
   h1,
   h2,
   h3,
   h4 {
     font-family: var(--font-display);
+    color: var(--text-primary);
     font-weight: 600;
-    letter-spacing: -0.03em;
-    line-height: 1.06;
+    letter-spacing: -0.022em;
+    line-height: 1.15;
+  }
+
+  h1 {
+    letter-spacing: -0.032em;
+    line-height: 1.08;
   }
 
   h3,
   h4 {
-    font-weight: 500;
-    letter-spacing: -0.015em;
+    font-weight: 550;
+    letter-spacing: -0.014em;
+  }
+
+  /* Any figure that can change should not reflow the layout as it does. */
+  [data-numeric],
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "cv05" 1;
   }
 
   :focus-visible {
-    outline: 2px solid var(--brass);
-    outline-offset: 3px;
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
   }
 
   ::selection {
-    background: var(--brass);
-    color: var(--onnavy);
+    background: var(--accent-wash-strong);
+    color: var(--text-primary);
+  }
+
+  /* Dark surfaces make default scrollbars glare. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+    background-clip: content-box;
   }
 }
 
-/* ---------- utilities ---------- */
+/* ========================================================================
+   Type scale
+   ======================================================================== */
+
+@utility text-display {
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.032em;
+  font-weight: 600;
+}
+
+@utility text-title {
+  font-size: 1.125rem;
+  line-height: 1.3;
+  letter-spacing: -0.018em;
+  font-weight: 600;
+}
+
+@utility text-body {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+}
+
+@utility text-small {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+@utility text-micro {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+/* Section labels. Uppercase at this size needs tracking or it sets as a blur. */
+@utility label-caps {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+@utility eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+@utility measure {
+  max-width: 64ch;
+}
+
+/* ========================================================================
+   Surfaces & controls
+   ======================================================================== */
+
+/* The standard raised container: lighter ground, hairline edge, no shadow —
+   the lightness is the elevation. */
+@utility surface-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+/* An inset well, for things that sit *into* the page rather than on it. */
+@utility surface-inset {
+  background: var(--surface-overlay);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+/* A card that responds to the pointer. Border before background: the edge
+   lighting up is quieter than the whole panel shifting. */
+@utility surface-interactive {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+@utility input-base {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-overlay);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
 
 @utility container-x {
   width: 100%;
   margin-inline: auto;
   max-width: 84rem;
-  padding-inline: 1.5rem;
+  padding-inline: var(--gutter);
   @media (min-width: 1024px) {
-    padding-inline: 3rem;
+    padding-inline: var(--gutter-lg);
   }
 }
 
@@ -152,44 +431,71 @@
   }
 }
 
-@utility measure {
-  max-width: 68ch;
+/* A hairline that fades at both ends — a divider that does not terminate in
+   two hard dots against the dark. */
+@utility rule-fade {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--line-strong) 12%, var(--line-strong) 88%, transparent);
 }
 
-@utility eyebrow {
-  font-size: 0.75rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-@utility input-base {
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  padding: 0.6rem 0.8rem;
-  font-size: 0.88rem;
-  color: var(--ink);
-  outline: none;
-}
-
-/* ---------- motion ---------- */
+/* ========================================================================
+   Motion
+   ======================================================================== */
 
 :root {
-  --ease-motion: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-el: 420ms;
-  --dur-seq: 900ms;
+  /* Retained: the old page transition referenced these. */
+  --ease-motion: var(--ease-out);
+  --dur-el: var(--dur-base);
+  --dur-seq: var(--dur-slow);
 }
 
-/* Page transition */
 .page-enter {
-  animation: page-enter 380ms var(--ease-motion) both;
+  animation: page-enter var(--dur-base) var(--ease-out) both;
 }
 
 @keyframes page-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Staggered reveal for a row of cards. Short, and it never runs twice —
+   anything longer turns a dashboard into a title sequence. */
+@utility stagger-in {
+  animation: stagger-in var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A live indicator: two rings, the outer one breathing. */
+@utility pulse-live {
+  animation: pulse-live 2s var(--ease-in-out) infinite;
+}
+
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.9);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -203,7 +509,9 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-  .page-enter {
+  .page-enter,
+  .stagger-in,
+  .pulse-live {
     animation: none !important;
   }
 }

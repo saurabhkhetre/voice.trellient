@@ -81,16 +81,35 @@ uncommitted design system is worse than an unreviewed one.**
 
 ## 2. BUGS & BREAKAGE
 
-**2.1 — Hydration error still fires, and the cause is now findable.**
-`src/lib/business/useBusiness.ts:43` calls
-`new Date(value).toLocaleString("en-IN", …)` inside the render path. Locale
-and timezone formatting resolve differently on server and client — the single
-most common React hydration mismatch, and React's own error text names it.
-It reproduces on `/auth` and on untouched pages, so it predates the redesign.
-**Medium · M — format on the client only (`useEffect`/`suppressHydrationWarning`),
-or send a pre-formatted string from the server.**
-Worth noting: this is louder than it looks. React discards the server tree and
-re-renders the whole subtree client-side on every affected page.
+**2.1 — Hydration error still fires. CORRECTED 2026-10-09 — the cause below is
+not what this audit first claimed.**
+
+This originally blamed `useBusiness.ts:43`
+(`new Date(value).toLocaleString("en-IN", …)` in the render path), reasoning
+from "most common cause" rather than from evidence. That is **wrong**, and two
+facts rule it out:
+
+- `/auth`, where the error fires, uses `formatDateTime` / `toLocaleString`
+  **zero times**.
+- Every file that does use them (`dashboard.index`, `call-history`,
+  `ai-quality`, `batch-call`) is under `_authenticated`, which is
+  **`ssr: false`** — never server-rendered, so it cannot produce a hydration
+  mismatch at all.
+
+The actual mismatch is structural. React's trace shows, inside `<AuthPage>`
+under a `<Lazy>` boundary, the server rendering `<Suspense>` where the client
+renders `<div className="container-x …">`. That is the router's code-splitting
+and SSR interaction, not application code — nothing in `auth.tsx` differs
+between server and client.
+
+**Medium · M** (not S). Fixing it means understanding how TanStack Start
+streams a lazy route boundary; a guessed fix here changes behaviour without
+touching the cause. Pinning a timezone, the obvious "fix" for the original
+misdiagnosis, would have altered every timestamp in the product and fixed
+nothing.
+
+Still louder than it looks: React discards the server tree and re-renders the
+subtree client-side on every affected page.
 
 **2.2 — `calls.intent` is never written, so Analytics "Top Intents" is
 permanently empty.** More precise than the ROADMAP's note: the plumbing
@@ -155,7 +174,11 @@ write into tenant data.
 `signOut` deletes one row.
 **Medium · M.**
 
-**3.4 — F-04, F-06, F-08 to F-14, F-16: unchanged.** Nothing in the telephony
+**3.4 — F-13 fixed 2026-10-09.** `VITE_DEV_USER_ID` and `DEV_USER_ID` deleted
+from `.env`; neither was read by any code and neither is in `.env.example`,
+so a fresh clone never reintroduces them.
+
+**3.5 — F-04, F-06, F-08 to F-12, F-14, F-16: unchanged.** Nothing in the telephony
 or UI work touched them.
 
 ### Tenant isolation
@@ -170,7 +193,7 @@ the session. The two new code paths were checked specifically:
 - `VoiceCatalog` serves a static capability list behind
   `requireBusinessMembership` — no tenant data.
 
-**3.5 — One thing to watch, not yet a bug.** `resolve_by_dialled_number` falls
+**3.6 — One thing to watch, not yet a bug.** `resolve_by_dialled_number` falls
 back to `businesses.phone` when no `phone_numbers` row matches. If two
 businesses ever share a phone string, `LIMIT 1` silently routes the call to
 whichever row sorts first. No unique constraint enforces this.
@@ -179,9 +202,9 @@ whichever row sorts first. No unique constraint enforces this.
 ### Secrets to the browser
 
 **Clean.** The only `VITE_`-prefixed values are `VITE_ANALYTICS_ID`
-(commented out in `.env.example`) and `VITE_DEV_USER_ID` (SECURITY.md F-13,
-dev-only, already known). No API key, LiveKit secret or DB credential is
-reachable from client code.
+(commented out in `.env.example`). `VITE_DEV_USER_ID` was the other one and
+has since been deleted (F-13, see 3.4). No API key, LiveKit secret or DB
+credential is reachable from client code.
 
 ---
 
@@ -412,7 +435,8 @@ knowing while making near-term decisions:
 
 ### Then — Medium
 
-9. Hydration error — `toLocaleString` in the render path *(2.1, M)*
+9. Hydration error — a lazy-route SSR mismatch on `/auth`, not the date
+   helper this audit first blamed *(2.1, M)*
 10. Decide the design-language question: dashboard vs landing *(6.5, M)*
 11. `.env` split signposted in SETUP.md *(7.3, S)*
 12. Proxy `/api/batch` *(5.2, S)*
@@ -432,7 +456,7 @@ knowing while making near-term decisions:
 19. Batch dialer runner *(5.1, L)* and alert evaluator *(5.4, L)* — both gated
     on 17
 20. Log inside the agent's suppressed teardown *(2.4, S)*
-21. Unique index on `businesses.phone` *(3.5, S)*
+21. Unique index on `businesses.phone` *(3.6, S)*
 
 **The first three items take under an hour and remove the only risk in this
 audit that cannot be undone.**

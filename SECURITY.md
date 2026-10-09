@@ -296,14 +296,17 @@ completeness.
 - The dead Supabase keys were removed from `.env` on 2026-09-20. The unused
   hosted project `curqreiywlyhesldgmia` should still be disabled.
 
-### F-13 (Low) — `VITE_DEV_USER_ID` is shipped to the browser
+### F-13 (Low) — ~~`VITE_DEV_USER_ID` is shipped to the browser~~ **FIXED 2026-10-09**
 
 `.env`. `VITE_`-prefixed variables are inlined into the client bundle. No code
-reads it (verified: zero references in `src/` and `services/api`), and a user id
+read it (verified: zero references in `src/` and `services/api`), and a user id
 is not a credential — but a browser-exposed variable that names a privileged dev
 account invites a future "fall back to dev user" shortcut, which would be a
 complete auth bypass.
-**Fix:** delete it.
+
+**Fixed:** deleted from `.env`, along with `DEV_USER_ID`, which nothing read
+either — the seed script defines it as a constant (`scripts/db-init.mjs:22`).
+Neither is in `.env.example`, so a fresh clone never gets them back.
 
 ### CORS
 

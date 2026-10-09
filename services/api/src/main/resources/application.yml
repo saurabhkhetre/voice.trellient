@@ -1,4 +1,10 @@
 spring:
+  # Local runs set no profile, so they get "dev" and the lenient defaults
+  # below. Anything else — SPRING_PROFILES_ACTIVE=prod, staging, whatever —
+  # is checked by StartupChecks and refuses to boot on a dev-only value.
+  profiles:
+    default: dev
+
   datasource:
     # JDBC form, kept separate from DATABASE_URL, which the web app and the
     # agent read as a postgres:// URI.

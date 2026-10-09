@@ -21,8 +21,8 @@ node scripts/db-init.mjs
 This applies `db/migrations/*.sql` to a local Postgres container (safe to run
 again — applied files are recorded in `schema_migrations`) and seeds one dev
 business, its owner with the sign-in `dev@trellient.local` / `trellient-dev`,
-and one enabled agent config. A database created by the old Supabase-era
-migrations is converted in place the first time it runs.
+one enabled agent config, and the dev knowledge corpus from
+`db/seeds/dev-knowledge.sql`.
 
 ## 3. Environment
 

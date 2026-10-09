@@ -288,9 +288,17 @@ Spring — that is, after P2, not as a follow-up to this cleanup.
 - [ ] *(post-P2)* Delete the last three `*.functions.ts` and `src/lib/db/pg.server.ts`
 - [ ] *(post-P2)* Delete `src/lib/auth/session.server.ts`, `password.server.ts`, `middleware.ts`, `access.ts`
 - [ ] *(post-P2)* Drop `pg` and `@types/pg` from `package.json`
-- [ ] Delete `db/convert-from-supabase.sql` and its branch in `scripts/db-init.mjs`
-- [ ] Scrub remaining Supabase mentions (`AGENTS.md`, `SETUP.md`, `0001_schema.sql` — comments only)
+- [x] Delete `db/convert-from-supabase.sql` and its branch in `scripts/db-init.mjs`.
+      Dead since the baseline was recorded in `schema_migrations` — the branch
+      only fires on a database built by the pre-migration Supabase schema, and
+      no such database is left. `SETUP.md` updated to match.
+- [x] Scrub remaining Supabase mentions. The ones still in the tree are kept on
+      purpose: `AGENTS.md` states there is no Supabase, `0001_schema.sql`
+      explains why the schema has no auth schema or roles, and MIGRATION /
+      ROADMAP / SECURITY record the migration itself. Deleting those would
+      remove the explanation, not a dependency.
 - [ ] Disable the unused hosted Supabase project `curqreiywlyhesldgmia`
+      (account action — nothing in the repo references it)
 - [ ] Decide where `db/migrations/` lives (repo root vs Flyway/Liquibase in `services/api`)
 
 ---

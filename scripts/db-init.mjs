@@ -2,9 +2,7 @@
 // business, owner (with a sign-in) and agent so the dashboard has something to load.
 //
 // Migrations run in filename order, each in its own transaction, and are
-// recorded in public.schema_migrations, so running this again is safe. A
-// database built from the old Supabase-era migrations is converted once with
-// db/convert-from-supabase.sql.
+// recorded in public.schema_migrations, so running this again is safe.
 //
 // Usage: node scripts/db-init.mjs   (DATABASE_URL overrides the local default)
 
@@ -17,9 +15,7 @@ import { Client } from "pg";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const migrationsDir = path.join(root, "db", "migrations");
-const converterPath = path.join(root, "db", "convert-from-supabase.sql");
 const knowledgeSeedPath = path.join(root, "db", "seeds", "dev-knowledge.sql");
-const BASELINE = "0001_schema.sql";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/trellient";
 
@@ -67,19 +63,6 @@ async function main() {
   const files = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
   const { rows: appliedRows } = await client.query("SELECT name FROM schema_migrations");
   const applied = new Set(appliedRows.map((row) => row.name));
-
-  // Tables but no recorded baseline: built by the old Supabase-era migrations.
-  const { rows } = await client.query("SELECT to_regclass('public.businesses') IS NOT NULL AS exists");
-  if (!applied.has(BASELINE) && rows[0].exists) {
-    process.stdout.write("Converting a Supabase-era schema to the baseline ... ");
-    const sql = await readFile(converterPath, "utf8");
-    await inTransaction(client, async () => {
-      await client.query(sql);
-      await client.query("INSERT INTO schema_migrations (name) VALUES ($1)", [BASELINE]);
-    });
-    applied.add(BASELINE);
-    console.log("ok");
-  }
 
   for (const file of files) {
     if (applied.has(file)) continue;

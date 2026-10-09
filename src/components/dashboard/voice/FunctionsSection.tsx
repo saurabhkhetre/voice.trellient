@@ -9,7 +9,15 @@ import { type AgentTool, type AgentToolPatch } from "@/lib/api/contracts";
 
 const PRESETS: { type: string; name: string; description: string }[] = [
   { type: "end_call", name: "End call", description: "Hang up politely once the caller's request is resolved." },
-  { type: "transfer_call", name: "Transfer to human", description: "Hand the caller to a teammate when asked." },
+  // The stored type is still transfer_call, but the tool behind it
+  // (escalate_to_human) files a callback request — it does not move a live
+  // call. Named for what happens, not for what the type is called. Rename the
+  // type too once real transfer exists.
+  {
+    type: "transfer_call",
+    name: "Escalate to human (callback)",
+    description: "Logs an escalation and tells the caller a teammate will call back. Does not transfer the live call.",
+  },
   {
     type: "book_appointment",
     name: "Book appointment",

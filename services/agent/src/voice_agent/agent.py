@@ -412,6 +412,38 @@ class ConversationManager:
                     )
                 )
 
+    def _intent(self) -> str | None:
+        """What the call was about, inferred from the tools the agent reached for.
+
+        calls.intent has always been written as NULL, so Analytics' Top Intents
+        has never had anything to show. The column, the UPDATE and the
+        aggregation all exist; nothing ever supplied a value.
+
+        Tool use is the signal already being collected -- ctx.tools_used is
+        tracked per call and stored on the same row -- so this costs nothing
+        extra. Returns None when no tool fired, rather than labelling the call
+        "general": an empty Top Intents is more honest than a bucket that means
+        nothing.
+
+        ponytail: first-match heuristic over tool names. Replace with a model-
+        derived intent at call end if the buckets prove too coarse.
+        """
+        if self.business is None:
+            return None
+        used = set(self.business.tools_used)
+        for intent, tools in (
+            ("escalation", {"escalate_to_human"}),
+            ("booking", {"appointment_create", "appointment_check"}),
+            ("quote", {"quote_create"}),
+            ("discount", {"discount_request"}),
+            ("pricing", {"pricing_lookup"}),
+            ("product_enquiry", {"product_lookup", "service_lookup"}),
+            ("information", {"knowledge_lookup", "policy_lookup"}),
+        ):
+            if used & tools:
+                return intent
+        return None
+
     def _summary(self) -> str:
         caller_turns = [text for speaker, text in self.turns if speaker == "caller"]
         if not caller_turns:
@@ -432,7 +464,10 @@ class ConversationManager:
             if not self._failed:
                 with contextlib.suppress(Exception):
                     await self.client.finish_call(
-                        self.business, duration_seconds=duration, summary=self._summary()
+                        self.business,
+                        duration_seconds=duration,
+                        summary=self._summary(),
+                        intent=self._intent(),
                     )
             with contextlib.suppress(Exception):
                 await self.client.aclose()

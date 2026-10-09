@@ -4,7 +4,15 @@
 // Run once, after the carrier account exists and you know which SIP hosts it
 // sends from:
 //
-//   node scripts/sip-setup.mjs --numbers +917507041938 --addresses sip.exotel.com
+//   node scripts/sip-setup.mjs --numbers +917507041938 \
+//     --addresses <YOUR-PROVIDER-SIP-HOST>
+//
+// --addresses is the carrier's SIP origination host, taken from their console.
+// It is the security boundary on the trunk, so it has to be the real value:
+//   Plivo   TODO: confirm the origination host for your region once the
+//           account exists. Plivo documents it per-region.
+//   Exotel  the SIP domain attached to the number.
+// Getting it wrong fails closed — the carrier's INVITE is rejected.
 //
 // Idempotent: a trunk or rule with the same name is reused rather than
 // duplicated. Re-run it to print the ids again.
@@ -44,7 +52,7 @@ if (numbers.length === 0) {
 // who learns the URI can run calls on your account.
 if (addresses.length === 0) {
   fail(
-    "Pass the carrier SIP hosts: --addresses sip.exotel.com[,...]\n" +
+    "Pass the carrier SIP hosts: --addresses <provider-sip-host>[,...]\n" +
       "  Refusing to create a trunk that accepts SIP from any address.",
   );
 }

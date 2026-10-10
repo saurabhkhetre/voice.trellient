@@ -24,14 +24,14 @@ The browser receives one room-scoped JWT with a 15-minute TTL.
 
 ## Abstractions
 
-| Abstraction | Where | Responsibility |
-| --- | --- | --- |
-| `TokenManager` | `apps/web/lib/token-manager.ts`, `src/lib/voice/livekit.server.ts` | Mints room-scoped LiveKit join tokens, validates server config |
-| `SessionManager` | `useVoiceSession` (both frontends) | Mic permission, token exchange, room lifecycle, reconnects |
-| `AgentStateManager` | `useVoiceSession` | Maps the `lk.agent.state` participant attribute to UI states |
-| `ConversationManager` | `services/agent/.../agent.py` | Starts one `AgentSession`, greets, wires events, tears down |
-| `VoiceAgent` | `services/agent/.../agent.py` | The assistant persona (system prompt + behaviour) |
-| `RealtimeModelProvider` | `services/agent/.../providers/` | Provider-agnostic realtime model factory |
+| Abstraction             | Where                                                              | Responsibility                                                 |
+| ----------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `TokenManager`          | `apps/web/lib/token-manager.ts`, `src/lib/voice/livekit.server.ts` | Mints room-scoped LiveKit join tokens, validates server config |
+| `SessionManager`        | `useVoiceSession` (both frontends)                                 | Mic permission, token exchange, room lifecycle, reconnects     |
+| `AgentStateManager`     | `useVoiceSession`                                                  | Maps the `lk.agent.state` participant attribute to UI states   |
+| `ConversationManager`   | `services/agent/.../agent.py`                                      | Starts one `AgentSession`, greets, wires events, tears down    |
+| `VoiceAgent`            | `services/agent/.../agent.py`                                      | The assistant persona (system prompt + behaviour)              |
+| `RealtimeModelProvider` | `services/agent/.../providers/`                                    | Provider-agnostic realtime model factory                       |
 
 ## Provider abstraction
 

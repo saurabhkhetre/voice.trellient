@@ -85,7 +85,8 @@
   --elev-1: 0 1px 2px rgb(0 0 0 / 0.4);
   --elev-2: 0 4px 12px -2px rgb(0 0 0 / 0.5);
   --elev-3: 0 16px 40px -8px rgb(0 0 0 / 0.6);
-  --glow-accent: 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
+  --glow-accent:
+    0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent),
     0 4px 20px -4px color-mix(in oklab, var(--accent) 35%, transparent);
 
   /* ---- Motion: fast. Anything over ~200ms on an interface control feels
@@ -243,7 +244,10 @@
     -moz-osx-font-smoothing: grayscale;
     /* Inter's contextual alternates and disambiguated glyphs. The precision
        look depends on the single-storey "a" and straight-sided "l". */
-    font-feature-settings: "cv05" 1, "cv08" 1, "ss03" 1;
+    font-feature-settings:
+      "cv05" 1,
+      "cv08" 1,
+      "ss03" 1;
     text-rendering: optimizeLegibility;
   }
 
@@ -275,7 +279,9 @@
   [data-numeric],
   .tabular {
     font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum" 1, "cv05" 1;
+    font-feature-settings:
+      "tnum" 1,
+      "cv05" 1;
   }
 
   :focus-visible {
@@ -435,7 +441,13 @@
    two hard dots against the dark. */
 @utility rule-fade {
   height: 1px;
-  background: linear-gradient(to right, transparent, var(--line-strong) 12%, var(--line-strong) 88%, transparent);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--line-strong) 12%,
+    var(--line-strong) 88%,
+    transparent
+  );
 }
 
 /* ========================================================================

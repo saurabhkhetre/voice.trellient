@@ -4,11 +4,7 @@ import { z } from "zod";
 
 import { getPool, iso } from "@/lib/db/pg.server";
 import { requireAuth } from "@/lib/auth/middleware";
-import {
-  requireAgentOwnership,
-  requireBusinessMembership,
-  requireBusinessRole,
-} from "@/lib/auth/access";
+import { requireAgentOwnership, requireBusinessMembership, requireBusinessRole } from "@/lib/auth/access";
 import type { Database } from "@/lib/db/types";
 import { deriveAgentRuntime, type AgentRuntime } from "@/lib/voice/runtime-status";
 
@@ -86,10 +82,10 @@ async function applyChanges(client: PoolClient, agentConfigId: string, changes: 
   if (entries.length === 0) return;
   // Column names come from the editableFields allowlist, never from the client.
   const assignments = entries.map(([column], i) => `${column} = $${i + 2}`);
-  await client.query(
-    `UPDATE agent_configs SET ${assignments.join(", ")}, updated_at = now() WHERE id = $1`,
-    [agentConfigId, ...entries.map(([, value]) => value)],
-  );
+  await client.query(`UPDATE agent_configs SET ${assignments.join(", ")}, updated_at = now() WHERE id = $1`, [
+    agentConfigId,
+    ...entries.map(([, value]) => value),
+  ]);
 }
 
 /** Saves the editable fields of an agent draft. */

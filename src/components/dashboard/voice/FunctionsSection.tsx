@@ -8,7 +8,11 @@ import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 import { type AgentTool, type AgentToolPatch } from "@/lib/api/contracts";
 
 const PRESETS: { type: string; name: string; description: string }[] = [
-  { type: "end_call", name: "End call", description: "Hang up politely once the caller's request is resolved." },
+  {
+    type: "end_call",
+    name: "End call",
+    description: "Hang up politely once the caller's request is resolved.",
+  },
   // The stored type is still transfer_call, but the tool behind it
   // (escalate_to_human) files a callback request — it does not move a live
   // call. Named for what happens, not for what the type is called. Rename the
@@ -16,7 +20,8 @@ const PRESETS: { type: string; name: string; description: string }[] = [
   {
     type: "transfer_call",
     name: "Escalate to human (callback)",
-    description: "Logs an escalation and tells the caller a teammate will call back. Does not transfer the live call.",
+    description:
+      "Logs an escalation and tells the caller a teammate will call back. Does not transfer the live call.",
   },
   {
     type: "book_appointment",
@@ -81,8 +86,8 @@ export function FunctionsSection({ agentId }: { agentId: string; businessId: str
   return (
     <div className="space-y-4">
       <p className="text-[0.85rem] text-muted-foreground">
-        Functions the agent may call mid-conversation. Every call is still checked against your pricing rules and
-        business hours.
+        Functions the agent may call mid-conversation. Every call is still checked against your pricing rules
+        and business hours.
       </p>
 
       <div className="space-y-3">

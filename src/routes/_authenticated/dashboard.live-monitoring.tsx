@@ -1,13 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Radio, Phone, Volume2, VolumeX } from "lucide-react";
-import {
-  Room,
-  RoomEvent,
-  Track,
-  type RemoteAudioTrack,
-} from "livekit-client";
+import { Room, RoomEvent, Track, type RemoteAudioTrack } from "livekit-client";
 
 import { PageHeader, Panel, Pill, StatCard } from "@/components/dashboard/Shell";
 import { useBusiness } from "@/lib/business/useBusiness";
@@ -48,18 +43,16 @@ function LiveMonitoringPage() {
         businessId: businessId!,
         scope: "active",
       });
-      return calls.map(
-        (call): ActiveCall => ({
-          id: call.id,
-          caller_number: call.callerNumber,
-          destination_number: call.destinationNumber,
-          agent_config_id: call.agentConfigId,
-          room_name: call.roomName,
-          status: call.status,
-          started_at: call.startedAt,
-          escalation_required: call.escalationRequired,
-        }),
-      );
+      return calls.map((call): ActiveCall => ({
+        id: call.id,
+        caller_number: call.callerNumber,
+        destination_number: call.destinationNumber,
+        agent_config_id: call.agentConfigId,
+        room_name: call.roomName,
+        status: call.status,
+        started_at: call.startedAt,
+        escalation_required: call.escalationRequired,
+      }));
     },
   });
 
@@ -76,10 +69,7 @@ function LiveMonitoringPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Live Monitoring"
-        description="Observe active calls in real-time."
-      />
+      <PageHeader title="Live Monitoring" description="Observe active calls in real-time." />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Active Calls" value={String(active)} />
@@ -89,9 +79,7 @@ function LiveMonitoringPage() {
 
       <Panel className="mt-6">
         {activeCalls.isLoading ? (
-          <p className="px-5 py-10 text-center text-[0.9rem] text-muted-foreground">
-            Loading active calls…
-          </p>
+          <p className="px-5 py-10 text-center text-[0.9rem] text-muted-foreground">Loading active calls…</p>
         ) : calls.length === 0 ? (
           <p className="px-5 py-10 text-center text-[0.9rem] text-muted-foreground">
             No active calls right now. Calls will appear here when they start.
@@ -110,9 +98,7 @@ function LiveMonitoringPage() {
         )}
       </Panel>
 
-      {listeningCall && (
-        <MonitorPanel call={listeningCall} onStop={handleStopListening} />
-      )}
+      {listeningCall && <MonitorPanel call={listeningCall} onStop={handleStopListening} />}
     </div>
   );
 }
@@ -151,9 +137,7 @@ function LiveCallRow({
           )}
         </div>
         <div>
-          <p className="text-[0.92rem] font-medium text-ink">
-            {call.caller_number ?? "Browser test call"}
-          </p>
+          <p className="text-[0.92rem] font-medium text-ink">{call.caller_number ?? "Browser test call"}</p>
           <p className="mt-0.5 text-[0.8rem] text-muted-foreground">{time}</p>
         </div>
       </div>
@@ -195,7 +179,9 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
   const rafRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  const [monitorStatus, setMonitorStatus] = useState<"connecting" | "connected" | "error" | "disconnected">("connecting");
+  const [monitorStatus, setMonitorStatus] = useState<"connecting" | "connected" | "error" | "disconnected">(
+    "connecting",
+  );
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
 
@@ -355,7 +341,12 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
     <Panel className="mt-6 p-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Radio className={cn("size-5", monitorStatus === "connected" ? "text-ink animate-pulse" : "text-muted-foreground")} />
+          <Radio
+            className={cn(
+              "size-5",
+              monitorStatus === "connected" ? "text-ink animate-pulse" : "text-muted-foreground",
+            )}
+          />
           <div>
             <p className="text-[0.92rem] font-medium text-ink">
               {monitorStatus === "connected"
@@ -366,9 +357,7 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
                     ? "Monitor error"
                     : "Disconnected"}
             </p>
-            {monitorError && (
-              <p className="mt-0.5 text-[0.82rem] text-destructive">{monitorError}</p>
-            )}
+            {monitorError && <p className="mt-0.5 text-[0.82rem] text-destructive">{monitorError}</p>}
           </div>
         </div>
         <button
@@ -395,10 +384,9 @@ function MonitorPanel({ call, onStop }: { call: ActiveCall; onStop: () => void }
           <h3 className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Live Transcript</h3>
           {transcript.map((entry) => (
             <p key={entry.id} className="text-[0.85rem] leading-relaxed">
-              <span className={cn(
-                "font-medium",
-                entry.role === "agent" ? "text-ink" : "text-muted-foreground",
-              )}>
+              <span
+                className={cn("font-medium", entry.role === "agent" ? "text-ink" : "text-muted-foreground")}
+              >
                 {entry.role === "agent" ? "Agent" : "Caller"}:
               </span>{" "}
               <span className="text-ink/80">{entry.text}</span>

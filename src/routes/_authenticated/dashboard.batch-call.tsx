@@ -137,12 +137,16 @@ function BatchCallPage() {
               >
                 <option value="">Select an agent…</option>
                 {enabledAgents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
                 ))}
               </select>
             </label>
             <label className="block">
-              <span className="text-[0.82rem] font-medium text-ink">Contact list (one phone number per line)</span>
+              <span className="text-[0.82rem] font-medium text-ink">
+                Contact list (one phone number per line)
+              </span>
               <textarea
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
@@ -181,16 +185,18 @@ function BatchCallPage() {
         ) : (
           <ul className="divide-y divide-line/70">
             {jobs.map((job) => {
-              const progress = job.totalContacts > 0
-                ? Math.round(((job.completedContacts + job.failedContacts) / job.totalContacts) * 100)
-                : 0;
+              const progress =
+                job.totalContacts > 0
+                  ? Math.round(((job.completedContacts + job.failedContacts) / job.totalContacts) * 100)
+                  : 0;
               return (
                 <li key={job.id} className="px-5 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-[0.92rem] font-medium text-ink">{job.name}</p>
                       <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                        {job.totalContacts} contacts · {job.completedContacts} completed · {job.failedContacts} failed
+                        {job.totalContacts} contacts · {job.completedContacts} completed ·{" "}
+                        {job.failedContacts} failed
                       </p>
                       <p className="text-[0.75rem] text-muted-foreground">
                         Created {formatDateTime(job.createdAt)}
@@ -199,10 +205,14 @@ function BatchCallPage() {
                     <div className="flex items-center gap-3">
                       <Pill
                         tone={
-                          job.status === "running" ? "good"
-                            : job.status === "completed" ? "neutral"
-                              : job.status === "paused" ? "warn"
-                                : job.status === "failed" ? "bad"
+                          job.status === "running"
+                            ? "good"
+                            : job.status === "completed"
+                              ? "neutral"
+                              : job.status === "paused"
+                                ? "warn"
+                                : job.status === "failed"
+                                  ? "bad"
                                   : "neutral"
                         }
                       >
@@ -216,7 +226,11 @@ function BatchCallPage() {
                           aria-label={job.status === "running" ? "Pause campaign" : "Start campaign"}
                           className="rounded-[8px] border border-line px-3 py-1.5 text-[0.82rem] text-ink hover:bg-secondary disabled:opacity-50"
                         >
-                          {job.status === "running" ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+                          {job.status === "running" ? (
+                            <Pause className="size-3.5" />
+                          ) : (
+                            <Play className="size-3.5" />
+                          )}
                         </button>
                       )}
                     </div>

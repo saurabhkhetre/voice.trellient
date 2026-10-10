@@ -44,6 +44,5 @@ livekit:
   api-key: ${LIVEKIT_API_KEY:devkey}
   api-secret: ${LIVEKIT_API_SECRET:secret}
 
-
 server:
   port: 8080

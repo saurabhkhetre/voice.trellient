@@ -1,9 +1,4 @@
-import {
-  roomNameForCall,
-  type InboundCall,
-  type TelephonyProvider,
-  type TransferRequest,
-} from "./provider";
+import { roomNameForCall, type InboundCall, type TelephonyProvider, type TransferRequest } from "./provider";
 
 /**
  * Exotel adapter. Credentials are read on the server only; the browser never
@@ -51,8 +46,7 @@ export function createExotelProvider(): TelephonyProvider {
         To: request.toNumber,
         CallerId: process.env["EXOTEL_CALLER_ID"] ?? "",
       }),
-    hangup: (providerCallId: string) =>
-      call("Calls/hangup.json", { CallSid: providerCallId }),
+    hangup: (providerCallId: string) => call("Calls/hangup.json", { CallSid: providerCallId }),
   };
 }
 

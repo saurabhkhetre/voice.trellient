@@ -10,14 +10,15 @@ const outboundInput = z.object({
   destinationNumber: z
     .string()
     .transform((value) => value.replace(/[\s()-]/g, ""))
-    .pipe(z.string().regex(/^\+?[0-9]{6,15}$/, "Enter the number in international format, e.g. +919876543210.")),
+    .pipe(
+      z.string().regex(/^\+?[0-9]{6,15}$/, "Enter the number in international format, e.g. +919876543210."),
+    ),
   /** Optional: which of the workspace's numbers to call from. */
   phoneNumberId: z.string().uuid().optional(),
 });
 
 export type OutboundCallResult =
-  | { ok: true; callId: string; roomName: string }
-  | { ok: false; error: string };
+  { ok: true; callId: string; roomName: string } | { ok: false; error: string };
 
 /**
  * Initiates an outbound call:
@@ -67,7 +68,8 @@ export const createOutboundCall = createServerFn({ method: "POST" })
       );
       const number = rows[0];
       if (!number) return { ok: false, error: "That phone number isn't active in this workspace." };
-      if (!number.outbound_enabled) return { ok: false, error: "Outbound calling is turned off for that number." };
+      if (!number.outbound_enabled)
+        return { ok: false, error: "Outbound calling is turned off for that number." };
       trunkId = number.outbound_trunk_id || trunkId;
       fromNumber = number.phone_number;
       phoneNumberId = number.id;
@@ -89,7 +91,14 @@ export const createOutboundCall = createServerFn({ method: "POST" })
           direction, caller_number, destination_number, status)
        VALUES ($1, $2, $3, 'sip', $4, $4, 'outbound', $5, $6, 'ringing')
        RETURNING id`,
-      [ownership.businessId, data.agentConfigId, phoneNumberId, roomName, fromNumber ?? null, data.destinationNumber],
+      [
+        ownership.businessId,
+        data.agentConfigId,
+        phoneNumberId,
+        roomName,
+        fromNumber ?? null,
+        data.destinationNumber,
+      ],
     );
     const callId = callRows[0]!.id;
 

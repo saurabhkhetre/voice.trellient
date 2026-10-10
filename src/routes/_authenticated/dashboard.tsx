@@ -10,7 +10,10 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
       { title: "Dashboard — Trellient" },
-      { name: "description", content: "Manage business data, the customer voice agent, calls and approvals." },
+      {
+        name: "description",
+        content: "Manage business data, the customer voice agent, calls and approvals.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -32,8 +35,7 @@ function DashboardLayout() {
   const create = useMutation({
     // Spring: POST /api/business/provision — idempotent, so a second click
     // returns the existing workspace with created=false instead of failing.
-    mutationFn: () =>
-      apiPost<{ businessId: string; created: boolean }>("/business/provision", {}),
+    mutationFn: () => apiPost<{ businessId: string; created: boolean }>("/business/provision", {}),
     onSuccess: () => {
       toast.success("Workspace ready.");
       void queryClient.invalidateQueries({ queryKey: ["business-context"] });
@@ -49,8 +51,8 @@ function DashboardLayout() {
         <div className="rounded-[12px] border border-line bg-card p-8">
           <h1 className="font-display text-[1.5rem] tracking-tight text-ink">No workspace yet</h1>
           <p className="measure mt-3 text-[0.93rem] text-muted-foreground">
-            Create your own workspace to get instant access to the Voice Agent Dashboard, products, pricing and
-            call history. You’ll be the owner.
+            Create your own workspace to get instant access to the Voice Agent Dashboard, products, pricing
+            and call history. You’ll be the owner.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
@@ -61,7 +63,12 @@ function DashboardLayout() {
             >
               {create.isPending ? "Setting up…" : "Create my workspace"}
             </button>
-            <a href="https://trellient.com/contact" target="_blank" rel="noopener noreferrer" className="text-[0.88rem] text-muted-foreground underline hover:text-ink">
+            <a
+              href="https://trellient.com/contact"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[0.88rem] text-muted-foreground underline hover:text-ink"
+            >
               Contact Trellient
             </a>
           </div>
@@ -69,7 +76,6 @@ function DashboardLayout() {
       ) : (
         <Outlet />
       )}
-
     </DashboardShell>
   );
 }

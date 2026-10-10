@@ -15,11 +15,11 @@ a day), L (multi-day).
 The brief lists four bodies of uncommitted work. Three of them are **already
 committed**:
 
-| Work | Commit |
-|---|---|
+| Work                                           | Commit    |
+| ---------------------------------------------- | --------- |
 | Voice-path hardening (catalog + LiveKit error) | `dde7105` |
-| P1.5 stop-the-lying UI | `84efabd` |
-| Inbound telephony Option A | `121975a` |
+| P1.5 stop-the-lying UI                         | `84efabd` |
+| Inbound telephony Option A                     | `121975a` |
 
 Only **Precision Dark** and an unrelated **Supabase cleanup** are uncommitted.
 The exposure is smaller than feared, but three commits are unpushed, which is
@@ -33,20 +33,20 @@ Branch `supabase-removal-and-agent-fixes`, **3 ahead of origin, 0 behind**.
 
 ### Staged
 
-| File | State |
-|---|---|
+| File                           | State                 |
+| ------------------------------ | --------------------- |
 | `db/convert-from-supabase.sql` | `D` — deleted, staged |
 
 ### Unstaged
 
-| File | Belongs to |
-|---|---|
-| `src/styles.css` | Precision Dark tokens |
-| `src/components/dashboard/Shell.tsx` | Precision Dark chrome |
-| `src/routes/_authenticated/dashboard.index.tsx` | Precision Dark hero page |
-| `scripts/db-init.mjs` | Supabase cleanup |
-| `SETUP.md` | Supabase cleanup |
-| `MIGRATION.md` | Supabase cleanup (checklist) |
+| File                                            | Belongs to                   |
+| ----------------------------------------------- | ---------------------------- |
+| `src/styles.css`                                | Precision Dark tokens        |
+| `src/components/dashboard/Shell.tsx`            | Precision Dark chrome        |
+| `src/routes/_authenticated/dashboard.index.tsx` | Precision Dark hero page     |
+| `scripts/db-init.mjs`                           | Supabase cleanup             |
+| `SETUP.md`                                      | Supabase cleanup             |
+| `MIGRATION.md`                                  | Supabase cleanup (checklist) |
 
 Untracked: none.
 
@@ -138,12 +138,12 @@ that call, with no log line.
 
 ### Previously fixed — all still fixed
 
-| Finding | Status | Evidence |
-|---|---|---|
-| **F-01** role checks on mutating endpoints | **Holds** | All 9 business controllers call `access.require*` (counts 1–6 each) |
-| **F-02** monitoring is owner/manager only | **Holds** | `VoiceController.java:93` `access.requireManager` |
-| **F-07** CSRF | **Holds** | `SecurityConfig:39-50`, cookie-to-header, exempt only on `/api/public/**` |
-| **F-17** duplicate test-call | **Holds** | Node implementation deleted; frontend uses Spring only |
+| Finding                                    | Status    | Evidence                                                                  |
+| ------------------------------------------ | --------- | ------------------------------------------------------------------------- |
+| **F-01** role checks on mutating endpoints | **Holds** | All 9 business controllers call `access.require*` (counts 1–6 each)       |
+| **F-02** monitoring is owner/manager only  | **Holds** | `VoiceController.java:93` `access.requireManager`                         |
+| **F-07** CSRF                              | **Holds** | `SecurityConfig:39-50`, cookie-to-header, exempt only on `/api/public/**` |
+| **F-17** duplicate test-call               | **Holds** | Node implementation deleted; frontend uses Spring only                    |
 
 `AuthController` has zero access checks — **correct, not a regression**: it is
 the pre-auth surface (`/api/auth/**` is `permitAll`), and CSRF still applies to
@@ -160,12 +160,12 @@ foreign agent id 404s rather than running.
 `SessionService.java:45` both default `APP_SESSION_SECURE_COOKIE` to false. A
 production deploy that forgets the variable ships session cookies over
 plaintext, silently.
-**High · S — default `true` and opt *out* for local http.** The current
+**High · S — default `true` and opt _out_ for local http.** The current
 default is backwards: the safe value should be the one you get by forgetting.
 
 **3.2 — F-15 is satisfied in Node and still pending for Spring.** The live
 webhook (`exotel.ts:15-19`) verifies `x-webhook-token` and 401s. The finding
-is a *warning about the future port* — `/api/public/**` is `permitAll` **and**
+is a _warning about the future port_ — `/api/public/**` is `permitAll` **and**
 CSRF-exempt in Spring, so porting without the check creates an unauthenticated
 write into tenant data.
 **Medium (High if the port happens) · S — port the token check with the route.**
@@ -187,7 +187,7 @@ or UI work touched them.
 the session. The two new code paths were checked specifically:
 
 - `resolve_by_dialled_number` (`business.py:161`) queries `phone_numbers` by
-  number — **not** business-scoped, correctly: it is *establishing* which
+  number — **not** business-scoped, correctly: it is _establishing_ which
   tenant owns an inbound call, so it cannot scope by one. It mirrors the
   webhook's resolution exactly, so the two cannot disagree about ownership.
 - `VoiceCatalog` serves a static capability list behind
@@ -226,7 +226,7 @@ it names a vendor you are not using, and a reader could take it for
 configuration rather than a guess.
 **High · S — update the trunk's `allowedAddresses` to Plivo's real origination
 hosts, or delete both resources until the provider is settled.**
-An empty allow-list is *not* an option: `createInboundTrunk` throws on it by
+An empty allow-list is _not_ an option: `createInboundTrunk` throws on it by
 design, because a trunk with no allow-list answers SIP from anywhere.
 
 **4.2 — `sip.trunkPhoneNumber` is still unverified.** `agent.py:94` reads it to
@@ -242,13 +242,13 @@ observed on a live call.**
 path (trunk → dispatch rule → room → agent resolves by dialled number) makes
 no Exotel assumption. What is Exotel-specific:
 
-| Thing | Provider-specific? |
-|---|---|
-| `sip.ts`, dispatch rule, room naming | No |
-| `resolve_by_dialled_number`, `read_sip_attributes` | No |
-| `lib/telephony/exotel.ts` (`parseInbound`, `transfer`, `hangup`) | **Yes** |
-| `routes/api/public/telephony/exotel.ts` (webhook shape) | **Yes** |
-| `phone_numbers.provider` default `'exotel'` | **Yes** |
+| Thing                                                            | Provider-specific? |
+| ---------------------------------------------------------------- | ------------------ |
+| `sip.ts`, dispatch rule, room naming                             | No                 |
+| `resolve_by_dialled_number`, `read_sip_attributes`               | No                 |
+| `lib/telephony/exotel.ts` (`parseInbound`, `transfer`, `hangup`) | **Yes**            |
+| `routes/api/public/telephony/exotel.ts` (webhook shape)          | **Yes**            |
+| `phone_numbers.provider` default `'exotel'`                      | **Yes**            |
 
 A Plivo move needs a sibling `plivo.ts` implementing the same
 `TelephonyProvider` interface plus a webhook route. The interface already
@@ -270,16 +270,16 @@ Everything else is built. The blocker remains the carrier account, not code.
 
 ## 5. INCOMPLETE / MOCK / STUBBED
 
-| # | Thing | Evidence | Sev | Eff |
-|---|---|---|---|---|
-| 5.1 | **Batch dialer never dials** | zero `@Scheduled`/`EnableScheduling` in the API; nothing reads `batch_job_contacts` | High | L |
-| 5.2 | **`/api/batch` not proxied** | absent from `vite.config.ts` | Medium | S |
-| 5.3 | **Outbound has no Spring endpoint** | no `voice/outbound` in `services/api` | High | M |
-| 5.4 | **Alert rules never fire** | one file touches `alert_rules`, and it is CRUD | High | L |
-| 5.5 | **`transfer_call` files a callback** | `tools.py:28` maps the preset to `escalate_to_human`, which inserts an `escalations` row and promises a call back | **High** | M |
-| 5.6 | **Exotel webhook is Node-only** | `src/routes/api/public/telephony/exotel.ts`; blocks Phase 5 Tier 2 | Medium | M |
-| 5.7 | **Top Intents always empty** | see 2.2 | Medium | M |
-| 5.8 | **`provider.transfer()` / `hangup()` orphaned** | implemented in `exotel.ts`, zero callers anywhere | Medium | S |
+| #   | Thing                                           | Evidence                                                                                                          | Sev      | Eff |
+| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------- | --- |
+| 5.1 | **Batch dialer never dials**                    | zero `@Scheduled`/`EnableScheduling` in the API; nothing reads `batch_job_contacts`                               | High     | L   |
+| 5.2 | **`/api/batch` not proxied**                    | absent from `vite.config.ts`                                                                                      | Medium   | S   |
+| 5.3 | **Outbound has no Spring endpoint**             | no `voice/outbound` in `services/api`                                                                             | High     | M   |
+| 5.4 | **Alert rules never fire**                      | one file touches `alert_rules`, and it is CRUD                                                                    | High     | L   |
+| 5.5 | **`transfer_call` files a callback**            | `tools.py:28` maps the preset to `escalate_to_human`, which inserts an `escalations` row and promises a call back | **High** | M   |
+| 5.6 | **Exotel webhook is Node-only**                 | `src/routes/api/public/telephony/exotel.ts`; blocks Phase 5 Tier 2                                                | Medium   | M   |
+| 5.7 | **Top Intents always empty**                    | see 2.2                                                                                                           | Medium   | M   |
+| 5.8 | **`provider.transfer()` / `hangup()` orphaned** | implemented in `exotel.ts`, zero callers anywhere                                                                 | Medium   | S   |
 
 **5.5 is the one I would raise with a customer present.** The others are
 absent features; this one is a **label that misdescribes behaviour**. A user
@@ -298,7 +298,7 @@ it files a callback request. Either rename the preset or wire it to
 aliases (`--ink`, `--paper`, `--navy`, `--brass`, `--onnavy`) are still defined
 in `styles.css` and remapped onto the new scale, so the fourteen files still
 using `text-ink` / `bg-card` / `border-line` inherit the dark surfaces without
-code changes. They are readable but not *composed* — old spacing, old type
+code changes. They are readable but not _composed_ — old spacing, old type
 scale, old flat hierarchy on a dark ground.
 **Not a bug. Low · L to finish the rollout.**
 
@@ -383,14 +383,14 @@ portable.
 
 ### Voice-specific — needs evolving
 
-| Table | Problem for WhatsApp |
-|---|---|
-| `calls` | The conversation root, but named and shaped for telephony: `caller_number`, `destination_number`, `duration_seconds`, `room_name`, `provider_call_id`, `direction` (inbound/outbound), `status` (ringing/in_progress) |
-| `call_transcripts` | `speaker`/`text`/`timestamp` is the right shape for messages, wrong name; no delivery/read state, no attachments |
-| `call_events` | Same |
-| `agent_configs` | Mixes channel-neutral (prompt, knowledge, tools, languages) with voice-only (`voice_name`, `model_provider`, `max_call_seconds`, `recording_enabled`) |
-| `phone_numbers` | Telephony-only; WhatsApp needs its own identity table |
-| `batch_jobs` | Assumes dialling |
+| Table              | Problem for WhatsApp                                                                                                                                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calls`            | The conversation root, but named and shaped for telephony: `caller_number`, `destination_number`, `duration_seconds`, `room_name`, `provider_call_id`, `direction` (inbound/outbound), `status` (ringing/in_progress) |
+| `call_transcripts` | `speaker`/`text`/`timestamp` is the right shape for messages, wrong name; no delivery/read state, no attachments                                                                                                      |
+| `call_events`      | Same                                                                                                                                                                                                                  |
+| `agent_configs`    | Mixes channel-neutral (prompt, knowledge, tools, languages) with voice-only (`voice_name`, `model_provider`, `max_call_seconds`, `recording_enabled`)                                                                 |
+| `phone_numbers`    | Telephony-only; WhatsApp needs its own identity table                                                                                                                                                                 |
+| `batch_jobs`       | Assumes dialling                                                                                                                                                                                                      |
 
 ### The shape of the gap
 
@@ -416,47 +416,47 @@ knowing while making near-term decisions:
 
 ### First — stop losing work (today, under an hour)
 
-1. **`git push`** — three commits exist on one machine. *(1.1, Critical, S)*
-2. **Commit the Supabase cleanup** — finished and verified. *(1.2, High, S)*
+1. **`git push`** — three commits exist on one machine. _(1.1, Critical, S)_
+2. **Commit the Supabase cleanup** — finished and verified. _(1.2, High, S)_
 3. **Commit Precision Dark separately** — unreviewed beats uncommitted.
-   *(1.3, High, S)*
+   _(1.3, High, S)_
 
 ### Then — High, cheap, breaks things today
 
 4. **Add the 5 missing keys to `.env.example`** — onboarding is broken without
-   them. *(7.2, High, S)*
+   them. _(7.2, High, S)_
 5. **Flip secure-cookie to default `true`** — the safe value should be the
-   default. *(3.1, High, S)*
-6. **Fail fast on LiveKit devkey defaults outside dev.** *(7.4, High, S)*
+   default. _(3.1, High, S)_
+6. **Fail fast on LiveKit devkey defaults outside dev.** _(7.4, High, S)_
 7. **Fix or rename `transfer_call`** — the only finding that actively
-   misdescribes behaviour to a user. *(5.5, High, M)*
+   misdescribes behaviour to a user. _(5.5, High, M)_
 8. **Resolve the SIP allow-list** — correct it for the real provider or delete
-   the two resources. *(4.1, High, S)*
+   the two resources. _(4.1, High, S)_
 
 ### Then — Medium
 
 9. Hydration error — a lazy-route SSR mismatch on `/auth`, not the date
-   helper this audit first blamed *(2.1, M)*
-10. Decide the design-language question: dashboard vs landing *(6.5, M)*
-11. `.env` split signposted in SETUP.md *(7.3, S)*
-12. Proxy `/api/batch` *(5.2, S)*
-13. Wire `provider.transfer()` / `hangup()` or delete them *(5.8, S)*
-14. `calls.intent` — pass it from the agent *(2.2, M)*
-15. F-05 bulk session revocation *(3.3, M)*
-16. Open a PR, or declare this branch the trunk *(1.4, S)*
+   helper this audit first blamed _(2.1, M)_
+10. Decide the design-language question: dashboard vs landing _(6.5, M)_
+11. `.env` split signposted in SETUP.md _(7.3, S)_
+12. Proxy `/api/batch` _(5.2, S)_
+13. Wire `provider.transfer()` / `hangup()` or delete them _(5.8, S)_
+14. `calls.intent` — pass it from the agent _(2.2, M)_
+15. F-05 bulk session revocation _(3.3, M)_
+16. Open a PR, or declare this branch the trunk _(1.4, S)_
 
 ### Decide before building more
 
-17. **Channel-agnostic schema** — decide *before* P2.2, because the batch
-    dialer and alert evaluator would both be built against `calls`. *(8, L)*
+17. **Channel-agnostic schema** — decide _before_ P2.2, because the batch
+    dialer and alert evaluator would both be built against `calls`. _(8, L)_
 
 ### Last — cosmetic / large
 
-18. Roll Precision Dark across the remaining twelve pages *(6.2, L)*
-19. Batch dialer runner *(5.1, L)* and alert evaluator *(5.4, L)* — both gated
+18. Roll Precision Dark across the remaining twelve pages _(6.2, L)_
+19. Batch dialer runner _(5.1, L)_ and alert evaluator _(5.4, L)_ — both gated
     on 17
-20. Log inside the agent's suppressed teardown *(2.4, S)*
-21. Unique index on `businesses.phone` *(3.6, S)*
+20. Log inside the agent's suppressed teardown _(2.4, S)_
+21. Unique index on `businesses.phone` _(3.6, S)_
 
 **The first three items take under an hour and remove the only risk in this
 audit that cannot be undone.**

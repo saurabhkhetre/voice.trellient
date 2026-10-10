@@ -52,7 +52,9 @@ function PhoneNumbersPage() {
         label: newLabel.trim() || null,
       }),
     onSuccess: () => {
-      toast.success("Phone number added. Configure your telephony provider to point at your Trellient webhook.");
+      toast.success(
+        "Phone number added. Configure your telephony provider to point at your Trellient webhook.",
+      );
       setNewNumber("");
       setNewLabel("");
       setShowAdd(false);
@@ -102,9 +104,16 @@ function PhoneNumbersPage() {
         <Panel className="mb-6 p-6">
           <h2 className="font-display text-[1.15rem] tracking-tight text-ink">Add a phone number</h2>
           <p className="mt-1 text-[0.82rem] text-muted-foreground">
-            Add the phone number your callers dial. Then point your telephony provider's webhook at your Trellient endpoint.
+            Add the phone number your callers dial. Then point your telephony provider's webhook at your
+            Trellient endpoint.
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); addMutation.mutate(); }} className="mt-4 grid gap-4 sm:grid-cols-2">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addMutation.mutate();
+            }}
+            className="mt-4 grid gap-4 sm:grid-cols-2"
+          >
             <label className="block">
               <span className="text-[0.82rem] font-medium text-ink">Phone number</span>
               <input
@@ -132,7 +141,11 @@ function PhoneNumbersPage() {
               >
                 {addMutation.isPending ? "Adding…" : "Save"}
               </button>
-              <button type="button" onClick={() => setShowAdd(false)} className="text-[0.85rem] text-muted-foreground hover:text-ink">
+              <button
+                type="button"
+                onClick={() => setShowAdd(false)}
+                className="text-[0.85rem] text-muted-foreground hover:text-ink"
+              >
                 Cancel
               </button>
             </div>
@@ -172,28 +185,29 @@ function PhoneNumbersPage() {
                   >
                     <option value="">Unassigned</option>
                     {(agents.data ?? []).map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
                     ))}
                   </select>
                   {/* Active toggle */}
                   <button
                     type="button"
-                    onClick={() =>
-                      updateMutation.mutate({ id: num.id, patch: { active: !num.active } })
-                    }
+                    onClick={() => updateMutation.mutate({ id: num.id, patch: { active: !num.active } })}
                     className="rounded-full border border-line px-3 py-1.5 text-[0.78rem] text-ink hover:bg-secondary"
                   >
                     {num.active ? "Active" : "Paused"}
                   </button>
-                  <Pill tone={num.active ? "good" : "neutral"}>
-                    {num.active ? "Live" : "Inactive"}
-                  </Pill>
+                  <Pill tone={num.active ? "good" : "neutral"}>{num.active ? "Live" : "Inactive"}</Pill>
                   {/* Delete with confirmation */}
                   {confirmDelete === num.id ? (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => { removeMutation.mutate(num.id); setConfirmDelete(null); }}
+                        onClick={() => {
+                          removeMutation.mutate(num.id);
+                          setConfirmDelete(null);
+                        }}
                         className="rounded-full bg-destructive px-3 py-1.5 text-[0.78rem] text-white"
                       >
                         Confirm

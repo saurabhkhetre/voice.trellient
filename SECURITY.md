@@ -31,17 +31,17 @@ Remaining open findings below are unchanged.
 
 ## Summary
 
-| Severity | Count | Status |
-| --- | --- | --- |
-| Critical | **0** | — |
-| High | 2 | **both fixed 2026-09-24** |
-| Medium | 5 | open |
-| Low | 7 | open |
+| Severity | Count | Status                    |
+| -------- | ----- | ------------------------- |
+| Critical | **0** | —                         |
+| High     | 2     | **both fixed 2026-09-24** |
+| Medium   | 5     | open                      |
+| Low      | 7     | open                      |
 
 **Headline: no unscoped tenant query was found.** All 33 endpoints reach tenant
-data only after a membership or ownership check. The exposure is not *who can
-see which workspace* — it is *what any member may do inside their own
-workspace*, because *role* is almost never checked.
+data only after a membership or ownership check. The exposure is not _who can
+see which workspace_ — it is _what any member may do inside their own
+workspace_, because _role_ is almost never checked.
 
 ---
 
@@ -64,16 +64,16 @@ Two access patterns are in use, both sound:
 Statements that run `WHERE id = ?` with no `business_id`, each verified to sit
 behind a guard:
 
-| Statement | Guard |
-| --- | --- |
-| `AgentToolController.java:113`, `:121` (UPDATE/DELETE `agent_tools`) | `requireRowAccess("agent_tools", …)` |
-| `AlertsController.java:108`, `:115` (UPDATE/DELETE `alert_rules`) | `requireRowAccess("alert_rules", …)` |
-| `PhoneNumberController.java:113`, `:121` (UPDATE/DELETE `phone_numbers`) | `requireRowAccess("phone_numbers", …)` |
-| `AgentConfigController.java:106`, `:116`, `:210` (publish, snapshot, save) | `requireAgentOwnership` |
-| `BatchController.java:146` (UPDATE `batch_jobs`) | explicit membership check at `:127`–`:131` |
-| `CallsController.java:124`, `:141` (`call_transcripts`, `call_events` by `call_id`) | `requireRowAccess("calls", callId)` |
-| `BusinessController.java:146` (UPDATE `businesses`) | `requireBusinessRole(owner, manager)` |
-| `VoiceController.java:71`, `:112` (`findById`) | `.filter(business.getId().equals(...))` |
+| Statement                                                                           | Guard                                      |
+| ----------------------------------------------------------------------------------- | ------------------------------------------ |
+| `AgentToolController.java:113`, `:121` (UPDATE/DELETE `agent_tools`)                | `requireRowAccess("agent_tools", …)`       |
+| `AlertsController.java:108`, `:115` (UPDATE/DELETE `alert_rules`)                   | `requireRowAccess("alert_rules", …)`       |
+| `PhoneNumberController.java:113`, `:121` (UPDATE/DELETE `phone_numbers`)            | `requireRowAccess("phone_numbers", …)`     |
+| `AgentConfigController.java:106`, `:116`, `:210` (publish, snapshot, save)          | `requireAgentOwnership`                    |
+| `BatchController.java:146` (UPDATE `batch_jobs`)                                    | explicit membership check at `:127`–`:131` |
+| `CallsController.java:124`, `:141` (`call_transcripts`, `call_events` by `call_id`) | `requireRowAccess("calls", callId)`        |
+| `BusinessController.java:146` (UPDATE `businesses`)                                 | `requireBusinessRole(owner, manager)`      |
+| `VoiceController.java:71`, `:112` (`findById`)                                      | `.filter(business.getId().equals(...))`    |
 
 `RecordsController` is scoped twice — `WHERE id = ? AND business_id = ?`
 (`:99`, `:125`) — which is the strongest pattern here and the one to copy.
@@ -98,7 +98,7 @@ write itself) removes it entirely.
 
 `services/BusinessService.java:33`, used by `AnalyticsController.java:53`,
 `:72`, `:141`, `BusinessController.java:38`, `VoiceController.java:62`, `:103`.
-`resolveBusinessForUser` returns the *oldest* membership. A user in two
+`resolveBusinessForUser` returns the _oldest_ membership. A user in two
 workspaces can never reach the second one through these endpoints, while the
 `businessId`-taking endpoints happily serve either. Not a leak — the data
 belongs to the caller — but the inconsistency will produce "wrong workspace"
@@ -131,7 +131,7 @@ Minted in `src/lib/auth/session.server.ts`; validated in
 Correct locally. But any deployment where `NODE_ENV` is unset, misspelled, or
 overridden sends the session cookie over plaintext HTTP, where it can be taken
 off the wire. The failure is silent.
-**Fix:** default to `secure: true` and opt *out* only for an explicit local flag.
+**Fix:** default to `secure: true` and opt _out_ only for an explicit local flag.
 
 ### F-05 (Medium) — no revocation beyond the current session
 
@@ -165,25 +165,25 @@ provisioned users become `owner` (`BusinessService.java:69`).
 
 ### F-01 (High) — ~~every other mutating endpoint accepts any member~~ **FIXED 2026-09-24**
 
-Membership is checked everywhere; *role* is not. An `agent`-role user — the
+Membership is checked everywhere; _role_ is not. An `agent`-role user — the
 lowest privilege the schema defines, presumably a support operator — can do all
 of the following in their workspace:
 
-| Endpoint | file:line | What an `agent` can do |
-| --- | --- | --- |
-| `POST /api/batch` | `BatchController.java:66` | Launch outbound calling to up to 5,000 numbers — **real telephony spend** |
-| `POST /api/batch/{jobId}/status` | `BatchController.java:119` | Start or pause any campaign |
-| `DELETE /api/records/{table}/{id}` | `RecordsController.java:118` | Delete customers, policies, knowledge base entries |
-| `POST /api/records/{table}` | `RecordsController.java:74` | Overwrite any of the above |
-| `DELETE /api/phone-numbers/{id}` | `PhoneNumberController.java:117` | Remove a phone number — **takes inbound calling down** |
-| `PATCH /api/phone-numbers/{id}` | `PhoneNumberController.java:83` | Re-route a number to a different agent, or deactivate it |
-| `POST/PATCH/DELETE agent tools` | `AgentToolController.java:57`, `:84`, `:117` | Enable/disable what the voice agent may do on a call |
-| `PATCH /api/agents/{id}` | `AgentConfigController.java:84` | Rewrite the agent's system instructions and greeting |
-| `POST /api/agents` | `AgentConfigController.java:68` | Create agents |
-| `POST/PATCH/DELETE alerts` | `AlertsController.java:59`, `:99`, `:111` | Delete alert rules — **disable the monitoring that would reveal the above** |
+| Endpoint                           | file:line                                    | What an `agent` can do                                                      |
+| ---------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------- |
+| `POST /api/batch`                  | `BatchController.java:66`                    | Launch outbound calling to up to 5,000 numbers — **real telephony spend**   |
+| `POST /api/batch/{jobId}/status`   | `BatchController.java:119`                   | Start or pause any campaign                                                 |
+| `DELETE /api/records/{table}/{id}` | `RecordsController.java:118`                 | Delete customers, policies, knowledge base entries                          |
+| `POST /api/records/{table}`        | `RecordsController.java:74`                  | Overwrite any of the above                                                  |
+| `DELETE /api/phone-numbers/{id}`   | `PhoneNumberController.java:117`             | Remove a phone number — **takes inbound calling down**                      |
+| `PATCH /api/phone-numbers/{id}`    | `PhoneNumberController.java:83`              | Re-route a number to a different agent, or deactivate it                    |
+| `POST/PATCH/DELETE agent tools`    | `AgentToolController.java:57`, `:84`, `:117` | Enable/disable what the voice agent may do on a call                        |
+| `PATCH /api/agents/{id}`           | `AgentConfigController.java:84`              | Rewrite the agent's system instructions and greeting                        |
+| `POST /api/agents`                 | `AgentConfigController.java:68`              | Create agents                                                               |
+| `POST/PATCH/DELETE alerts`         | `AlertsController.java:59`, `:99`, `:111`    | Delete alert rules — **disable the monitoring that would reveal the above** |
 
 The agent-config gap is the sharpest: `PATCH /api/agents/{id}` can rewrite
-`system_instructions` freely, and only *publishing* requires `manager`. That
+`system_instructions` freely, and only _publishing_ requires `manager`. That
 distinction gives no protection, because the voice worker loads the **live**
 row — `SELECT * FROM agent_configs WHERE id = $1`
 (`services/agent/src/voice_agent/business.py:109`) — and never reads
@@ -233,13 +233,13 @@ where request data is concatenated into SQL.
 SQL is assembled by string concatenation in five places, all for **identifiers**
 (table/column names), never values:
 
-| Location | Source of the identifier | Safe? |
-| --- | --- | --- |
-| `RecordsController.java:69`, `:99`, `:112`, `:125` | `RECORD_SCHEMAS` map; `schemaOf()` rejects anything else with 404 | Yes |
-| `AccessService.java:106`–`:108` | `table` parameter — every call site passes a hardcoded literal (`"agent_tools"`, `"alert_rules"`, `"phone_numbers"`, `"calls"`) | Yes |
-| `AgentConfigController.java:210` | `EDITABLE` allow-list | Yes |
-| `AgentToolController.java:113`, `PhoneNumberController.java:113`, `BusinessController.java:146` | hardcoded column names | Yes |
-| `CallsController.java:49` (`scope` filter) | fixed `SCOPE_FILTERS` map lookup | Yes |
+| Location                                                                                        | Source of the identifier                                                                                                        | Safe? |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `RecordsController.java:69`, `:99`, `:112`, `:125`                                              | `RECORD_SCHEMAS` map; `schemaOf()` rejects anything else with 404                                                               | Yes   |
+| `AccessService.java:106`–`:108`                                                                 | `table` parameter — every call site passes a hardcoded literal (`"agent_tools"`, `"alert_rules"`, `"phone_numbers"`, `"calls"`) | Yes   |
+| `AgentConfigController.java:210`                                                                | `EDITABLE` allow-list                                                                                                           | Yes   |
+| `AgentToolController.java:113`, `PhoneNumberController.java:113`, `BusinessController.java:146` | hardcoded column names                                                                                                          | Yes   |
+| `CallsController.java:49` (`scope` filter)                                                      | fixed `SCOPE_FILTERS` map lookup                                                                                                | Yes   |
 
 ### F-04 (Medium) — the injection safety is a convention, not a mechanism
 
@@ -384,7 +384,7 @@ implementation, not two. (Phase 5.)
 
 3. **F-03** — default the session cookie to `Secure`; opt out only locally.
 4. **F-07** — decide the Phase 5 auth transport (same-origin + CSRF, or Bearer
-   only) *before* wiring the frontend to Spring.
+   only) _before_ wiring the frontend to Spring.
 5. **F-05** — add bulk session revocation.
 6. **F-04** — enforce the SQL identifier allow-list inside the helpers, with a test.
 7. **F-06** — audit log for privileged mutations.

@@ -6,12 +6,12 @@ working phone calls until step 6 passes.
 
 ## What is already in the codebase
 
-| Piece | Location |
-| --- | --- |
-| Provider interface (`receiveCall`, `startCall`, `endCall`, `transferCall`, `getCallStatus`, `getRecording`) | `src/lib/telephony/provider.ts` |
-| Exotel adapter | `src/lib/telephony/exotel.ts` |
-| Inbound webhook | `src/routes/api/public/telephony/exotel.ts` |
-| Agent runtime that joins the room and uses business data | `services/agent/` |
+| Piece                                                                                                       | Location                                    |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Provider interface (`receiveCall`, `startCall`, `endCall`, `transferCall`, `getCallStatus`, `getRecording`) | `src/lib/telephony/provider.ts`             |
+| Exotel adapter                                                                                              | `src/lib/telephony/exotel.ts`               |
+| Inbound webhook                                                                                             | `src/routes/api/public/telephony/exotel.ts` |
+| Agent runtime that joins the room and uses business data                                                    | `services/agent/`                           |
 
 The webhook resolves the business and agent by matching the dialled number
 against `phone_numbers` (falling back to `businesses.phone`), refuses the call

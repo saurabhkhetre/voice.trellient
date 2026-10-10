@@ -9,8 +9,18 @@ const BARS = [0.35, 0.6, 0.9, 0.7, 1, 0.55, 0.8, 0.45, 0.3];
 
 /** Live browser test call against the selected agent. */
 export function TestCallPanel({ agentId, agentName }: { agentId: string | null; agentName: string }) {
-  const { status, agentState, micEnabled, error, missingConfig, transcript, level, connect, disconnect, toggleMic } =
-    useVoiceSession();
+  const {
+    status,
+    agentState,
+    micEnabled,
+    error,
+    missingConfig,
+    transcript,
+    level,
+    connect,
+    disconnect,
+    toggleMic,
+  } = useVoiceSession();
 
   const live = status === "connected" || status === "waiting-for-agent" || status === "reconnecting";
   const busy = status === "requesting-mic" || status === "issuing-token" || status === "connecting";
@@ -28,7 +38,10 @@ export function TestCallPanel({ agentId, agentName }: { agentId: string | null; 
           return (
             <span
               key={i}
-              className={cn("w-1.5 rounded-full transition-[height] duration-150", live ? "bg-brass" : "bg-ink/15")}
+              className={cn(
+                "w-1.5 rounded-full transition-[height] duration-150",
+                live ? "bg-brass" : "bg-ink/15",
+              )}
               style={{ height: `${8 + active * 48}px` }}
             />
           );

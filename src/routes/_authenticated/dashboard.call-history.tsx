@@ -36,7 +36,10 @@ function CallsPage() {
 
   return (
     <div>
-      <PageHeader title="Calls" description="Every conversation, with transcript, summary and the tools used." />
+      <PageHeader
+        title="Calls"
+        description="Every conversation, with transcript, summary and the tools used."
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <Panel>
@@ -65,7 +68,11 @@ function CallsPage() {
                         {call.language?.toUpperCase() ?? "—"}
                       </p>
                     </div>
-                    <Pill tone={call.escalationRequired ? "warn" : call.status === "completed" ? "good" : "neutral"}>
+                    <Pill
+                      tone={
+                        call.escalationRequired ? "warn" : call.status === "completed" ? "good" : "neutral"
+                      }
+                    >
                       {call.escalationRequired ? "Escalated" : call.status}
                     </Pill>
                   </button>
@@ -91,9 +98,7 @@ function CallsPage() {
                   {formatDateTime(current.startedAt)} · {formatDuration(current.durationSeconds)}
                   {current.intent ? ` · ${current.intent}` : ""}
                 </p>
-                {current.summary ? (
-                  <p className="mt-3 text-[0.9rem] text-ink">{current.summary}</p>
-                ) : null}
+                {current.summary ? <p className="mt-3 text-[0.9rem] text-ink">{current.summary}</p> : null}
                 {current.toolsUsed.length ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {current.toolsUsed.map((tool) => (

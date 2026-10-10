@@ -72,20 +72,18 @@ function AIQualityPage() {
         businessId: businessId!,
         scope: "finished",
       });
-      return calls.map(
-        (call): CallQA => ({
-          id: call.id,
-          caller_number: call.callerNumber,
-          started_at: call.startedAt,
-          duration_seconds: call.durationSeconds,
-          status: call.status,
-          escalation_required: call.escalationRequired,
-          intent: call.intent,
-          outcome: call.outcome,
-          language: call.language,
-          latency_ms: call.latencyMs,
-        }),
-      );
+      return calls.map((call): CallQA => ({
+        id: call.id,
+        caller_number: call.callerNumber,
+        started_at: call.startedAt,
+        duration_seconds: call.durationSeconds,
+        status: call.status,
+        escalation_required: call.escalationRequired,
+        intent: call.intent,
+        outcome: call.outcome,
+        language: call.language,
+        latency_ms: call.latencyMs,
+      }));
     },
   });
 
@@ -113,8 +111,8 @@ function AIQualityPage() {
             <div>
               <h2 className="font-display text-[1.25rem] tracking-tight text-ink">Not enough data</h2>
               <p className="mt-2 text-[0.92rem] text-muted-foreground">
-                Quality metrics require at least {MIN_CALLS_FOR_QA} completed calls.
-                You currently have {calls.length} call{calls.length !== 1 ? "s" : ""}.
+                Quality metrics require at least {MIN_CALLS_FOR_QA} completed calls. You currently have{" "}
+                {calls.length} call{calls.length !== 1 ? "s" : ""}.
               </p>
               <p className="mt-1 text-[0.82rem] text-muted-foreground">
                 Deploy your agent and handle more calls to see quality insights here.
@@ -137,7 +135,11 @@ function AIQualityPage() {
         <StatCard label="Avg. Quality Score" value={`${avgScore}%`} />
         <StatCard label="Calls Analyzed" value={String(calls.length)} />
         <StatCard label="Escalations" value={String(calls.filter((c) => c.escalation_required).length)} />
-        <StatCard label="Flagged" value={String(flaggedCount)} hint={flaggedCount > 0 ? "Needs attention" : "All clear"} />
+        <StatCard
+          label="Flagged"
+          value={String(flaggedCount)}
+          hint={flaggedCount > 0 ? "Needs attention" : "All clear"}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
@@ -176,9 +178,7 @@ function AIQualityPage() {
                       >
                         {score}
                       </span>
-                      <Pill
-                        tone={issues.length === 0 ? "good" : issues.length <= 1 ? "warn" : "bad"}
-                      >
+                      <Pill tone={issues.length === 0 ? "good" : issues.length <= 1 ? "warn" : "bad"}>
                         {issues.length === 0 ? "good" : issues.length <= 1 ? "warning" : "flagged"}
                       </Pill>
                     </div>
@@ -209,7 +209,10 @@ function CallQADetail({ call }: { call: CallQA }) {
     { label: "Call completed successfully", pass: call.status === "completed" },
     { label: "No escalation needed", pass: !call.escalation_required },
     { label: "Response latency acceptable", pass: !call.latency_ms || call.latency_ms < 2000 },
-    { label: "Duration within normal range", pass: !call.duration_seconds || (call.duration_seconds > 5 && call.duration_seconds < 300) },
+    {
+      label: "Duration within normal range",
+      pass: !call.duration_seconds || (call.duration_seconds > 5 && call.duration_seconds < 300),
+    },
   ];
 
   return (

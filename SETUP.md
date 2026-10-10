@@ -77,12 +77,12 @@ npx tsc --noEmit                           # frontend typecheck
 
 ## Troubleshooting
 
-| Symptom | Cause |
-| --- | --- |
-| "Voice runtime is not configured yet." | Web `.env` missing a `LIVEKIT_*` value |
-| Status stalls on "Waiting for the agent" | Agent worker isn't running, or points at a different LiveKit project |
-| `Missing configuration: OPENAI_API_KEY or GOOGLE_API_KEY` | `services/agent/.env` incomplete |
-| Mic blocked | Browsers require HTTPS or `localhost` for `getUserMedia` |
-| Dashboard shows "No workspace yet" | Expected for a new account — click **Create my workspace** |
-| Dev sign-in says "Wrong email or password." | `node scripts/db-init.mjs` hasn't been run against this database |
-| "Unauthorized: sign in to continue." | Your session is missing or expired — sign in again at `/auth` |
+| Symptom                                                   | Cause                                                                |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| "Voice runtime is not configured yet."                    | Web `.env` missing a `LIVEKIT_*` value                               |
+| Status stalls on "Waiting for the agent"                  | Agent worker isn't running, or points at a different LiveKit project |
+| `Missing configuration: OPENAI_API_KEY or GOOGLE_API_KEY` | `services/agent/.env` incomplete                                     |
+| Mic blocked                                               | Browsers require HTTPS or `localhost` for `getUserMedia`             |
+| Dashboard shows "No workspace yet"                        | Expected for a new account — click **Create my workspace**           |
+| Dev sign-in says "Wrong email or password."               | `node scripts/db-init.mjs` hasn't been run against this database     |
+| "Unauthorized: sign in to continue."                      | Your session is missing or expired — sign in again at `/auth`        |

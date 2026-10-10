@@ -79,7 +79,9 @@ function KnowledgePage() {
             {
               key: "active",
               label: "Status",
-              render: (r) => <Pill tone={r["active"] ? "good" : "neutral"}>{r["active"] ? "Live" : "Off"}</Pill>,
+              render: (r) => (
+                <Pill tone={r["active"] ? "good" : "neutral"}>{r["active"] ? "Live" : "Off"}</Pill>
+              ),
             },
           ]}
         />
@@ -109,7 +111,9 @@ function KnowledgePage() {
             {
               key: "active",
               label: "Status",
-              render: (r) => <Pill tone={r["active"] ? "good" : "neutral"}>{r["active"] ? "Live" : "Off"}</Pill>,
+              render: (r) => (
+                <Pill tone={r["active"] ? "good" : "neutral"}>{r["active"] ? "Live" : "Off"}</Pill>
+              ),
             },
           ]}
         />

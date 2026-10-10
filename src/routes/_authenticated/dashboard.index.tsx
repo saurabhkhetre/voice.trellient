@@ -60,9 +60,24 @@ function DashboardHome() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Calls Today", value: d ? String(d.callsToday) : "—", tone: "neutral" as const },
-          { label: "Active Calls", value: d ? String(d.activeCalls) : "—", hint: "In progress now", tone: "live" as const },
-          { label: "Active Agents", value: d ? String(d.activeAgents) : "—", hint: "Enabled configs", tone: "neutral" as const },
-          { label: "Open Escalations", value: d ? String(d.openEscalations) : "—", hint: "Awaiting a human", tone: "warn" as const },
+          {
+            label: "Active Calls",
+            value: d ? String(d.activeCalls) : "—",
+            hint: "In progress now",
+            tone: "live" as const,
+          },
+          {
+            label: "Active Agents",
+            value: d ? String(d.activeAgents) : "—",
+            hint: "Enabled configs",
+            tone: "neutral" as const,
+          },
+          {
+            label: "Open Escalations",
+            value: d ? String(d.openEscalations) : "—",
+            hint: "Awaiting a human",
+            tone: "warn" as const,
+          },
         ].map((card, i) => (
           <div key={card.label} className="stagger-in" style={{ animationDelay: `${i * 40}ms` }}>
             <StatCard {...card} />

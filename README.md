@@ -37,22 +37,22 @@ See [SETUP.md](./SETUP.md) for full local setup and [DEPLOYMENT.md](./DEPLOYMENT
 
 ## Dashboard Pages
 
-| Route | Description |
-|---|---|
-| `/auth` | Sign in / sign up |
-| `/dashboard` | Home: today's calls, active calls, agents, open escalations |
-| `/dashboard/agents` | Agent studio: prompt, model and voice, test calls, call history |
-| `/dashboard/knowledge` | Business knowledge base |
-| `/dashboard/phone-numbers` | Phone numbers and agent assignment |
-| `/dashboard/batch-call` | Outbound call campaigns |
-| `/dashboard/call-history` | Call logs and transcripts |
-| `/dashboard/contacts` | Customer records |
-| `/dashboard/analytics` | Call volume, containment, intents |
-| `/dashboard/live-monitoring` | Listen in on active calls |
-| `/dashboard/ai-quality` | Call quality review |
-| `/dashboard/alerting` | Alert rules |
-| `/dashboard/integrations` | Integrations |
-| `/dashboard/settings` | Business settings |
+| Route                        | Description                                                     |
+| ---------------------------- | --------------------------------------------------------------- |
+| `/auth`                      | Sign in / sign up                                               |
+| `/dashboard`                 | Home: today's calls, active calls, agents, open escalations     |
+| `/dashboard/agents`          | Agent studio: prompt, model and voice, test calls, call history |
+| `/dashboard/knowledge`       | Business knowledge base                                         |
+| `/dashboard/phone-numbers`   | Phone numbers and agent assignment                              |
+| `/dashboard/batch-call`      | Outbound call campaigns                                         |
+| `/dashboard/call-history`    | Call logs and transcripts                                       |
+| `/dashboard/contacts`        | Customer records                                                |
+| `/dashboard/analytics`       | Call volume, containment, intents                               |
+| `/dashboard/live-monitoring` | Listen in on active calls                                       |
+| `/dashboard/ai-quality`      | Call quality review                                             |
+| `/dashboard/alerting`        | Alert rules                                                     |
+| `/dashboard/integrations`    | Integrations                                                    |
+| `/dashboard/settings`        | Business settings                                               |
 
 ---
 

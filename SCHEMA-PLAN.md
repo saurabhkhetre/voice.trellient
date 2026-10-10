@@ -25,34 +25,34 @@ sees `calls`.
 
 ### Already channel-neutral — reuse unchanged
 
-| Table | Note |
-|---|---|
-| `agent_knowledge` | **No voice concepts at all.** The ranked full-text retrieval in `BusinessClient.knowledge_lookup` is channel-neutral; a WhatsApp agent can call it as-is. This is the single biggest asset already portable. |
-| `business_policies` | Same. `policy_lookup` likewise. |
-| `products`, `services`, `pricing_rules` | Catalogue and price floors. No channel. |
-| `quotes`, `quote_items` | **One voice coupling**: `quotes.source_call_id` → `calls(id)`. |
-| `appointments` | Same coupling: `appointments.source_call_id`. |
-| `escalations` | Same: `escalations.call_id`. |
-| `customers` | Neutral, but **`phone` is the only identity column** — see 1.3. |
-| `businesses`, `business_users`, `users`, `user_sessions` | Tenancy and auth. Untouched. |
-| `approvals` | Neutral. |
+| Table                                                    | Note                                                                                                                                                                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent_knowledge`                                        | **No voice concepts at all.** The ranked full-text retrieval in `BusinessClient.knowledge_lookup` is channel-neutral; a WhatsApp agent can call it as-is. This is the single biggest asset already portable. |
+| `business_policies`                                      | Same. `policy_lookup` likewise.                                                                                                                                                                              |
+| `products`, `services`, `pricing_rules`                  | Catalogue and price floors. No channel.                                                                                                                                                                      |
+| `quotes`, `quote_items`                                  | **One voice coupling**: `quotes.source_call_id` → `calls(id)`.                                                                                                                                               |
+| `appointments`                                           | Same coupling: `appointments.source_call_id`.                                                                                                                                                                |
+| `escalations`                                            | Same: `escalations.call_id`.                                                                                                                                                                                 |
+| `customers`                                              | Neutral, but **`phone` is the only identity column** — see 1.3.                                                                                                                                              |
+| `businesses`, `business_users`, `users`, `user_sessions` | Tenancy and auth. Untouched.                                                                                                                                                                                 |
+| `approvals`                                              | Neutral.                                                                                                                                                                                                     |
 
 ### Voice-specific — the actual work
 
 **1.1 `calls` — the conversation root, telephony-shaped.** 28 columns. Sorting
 them by whether a WhatsApp conversation would have them:
 
-*Would have (channel-neutral):* `id`, `business_id`, `customer_id`,
+_Would have (channel-neutral):_ `id`, `business_id`, `customer_id`,
 `agent_config_id`, `started_at`, `ended_at`, `language`, `intent`, `outcome`,
 `summary`, `tools_used`, `escalation_required`, `escalation_reason`,
 `created_at`.
 
-*Would not (voice-only):* `caller_number`, `destination_number`,
+_Would not (voice-only):_ `caller_number`, `destination_number`,
 `answered_at`, `duration_seconds`, `room_name`, `provider_call_id`,
 `recording_url`, `latency_ms`, `telephony_cost`, `livekit_cost`,
 `phone_number_id`.
 
-*Wrong shape rather than absent:* `direction` (`inbound|outbound` — a WhatsApp
+_Wrong shape rather than absent:_ `direction` (`inbound|outbound` — a WhatsApp
 thread is bidirectional, not one or the other), `status`
 (`ringing|in_progress|completed|missed|failed` — "ringing" and "missed" are
 meaningless for messaging), `provider` (defaults `'browser'`).
@@ -212,11 +212,11 @@ and adding an enum value needs a migration.
 
 The 28 columns split cleanly:
 
-| Kind | Columns | Treatment |
-|---|---|---|
-| **Shared identity & behaviour** | `name`, `enabled`, `personality`, `business_description`, `system_instructions`, `primary_language`, `supported_languages`, `allowed_actions`, `restricted_actions`, `approval_required_actions`, `escalation_enabled`, `escalation_rules`, `business_hours`, versioning | Stay. Both channels read them. |
-| **Voice-only** | `voice_name`, `voice_speed`, `max_call_seconds`, `recording_enabled`, `model_provider`, `model_name` | Stay where they are. Meaningless to WhatsApp, harmless. |
-| **Differs per channel** | `greeting`, `after_hours_response` | **The real problem.** A spoken greeting and a WhatsApp opener are not the same text. |
+| Kind                            | Columns                                                                                                                                                                                                                                                                  | Treatment                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **Shared identity & behaviour** | `name`, `enabled`, `personality`, `business_description`, `system_instructions`, `primary_language`, `supported_languages`, `allowed_actions`, `restricted_actions`, `approval_required_actions`, `escalation_enabled`, `escalation_rules`, `business_hours`, versioning | Stay. Both channels read them.                                                       |
+| **Voice-only**                  | `voice_name`, `voice_speed`, `max_call_seconds`, `recording_enabled`, `model_provider`, `model_name`                                                                                                                                                                     | Stay where they are. Meaningless to WhatsApp, harmless.                              |
+| **Differs per channel**         | `greeting`, `after_hours_response`                                                                                                                                                                                                                                       | **The real problem.** A spoken greeting and a WhatsApp opener are not the same text. |
 
 Proposal — one additive column, no new table:
 
@@ -355,7 +355,7 @@ appears — it is one nullable column.
 Five steps. **Steps 1–2 ship before the WhatsApp agent needs anything, and
 neither touches a line of voice code.**
 
-### Step 1 — additive only *(no code changes, no risk)*
+### Step 1 — additive only _(no code changes, no risk)_
 
 Create `conversations`, `messages`, `channel_deliveries`, the new enums, and
 `agent_configs.channel_overrides`. Nothing reads them. `calls` is untouched
@@ -365,7 +365,7 @@ and the voice agent cannot tell anything happened.
 `channel='whatsapp'` and never touches `calls`. The two channels coexist in
 separate rows of the same table before any voice code moves.
 
-### Step 2 — backfill and dual-write *(small, reversible)*
+### Step 2 — backfill and dual-write _(small, reversible)_
 
 Backfill the 75 existing calls into `conversations`:
 

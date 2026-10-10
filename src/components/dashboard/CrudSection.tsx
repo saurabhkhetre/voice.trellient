@@ -97,7 +97,11 @@ export function CrudSection({
   const rows = (list.data ?? []).filter((row) => {
     if (!search.trim() || searchColumns.length === 0) return true;
     const needle = search.toLowerCase();
-    return searchColumns.some((col) => String(row[col] ?? "").toLowerCase().includes(needle));
+    return searchColumns.some((col) =>
+      String(row[col] ?? "")
+        .toLowerCase()
+        .includes(needle),
+    );
   });
 
   const formOpen = creating || editing !== null;
@@ -223,8 +227,7 @@ export function RecordForm({
     const seed: Row = {};
     for (const field of fields) {
       const current = initial[field.name];
-      seed[field.name] =
-        current ?? (field.type === "boolean" ? true : field.type === "number" ? "" : "");
+      seed[field.name] = current ?? (field.type === "boolean" ? true : field.type === "number" ? "" : "");
     }
     return seed;
   });
@@ -313,7 +316,9 @@ export function RecordForm({
                 className="mt-1.5 w-full rounded-[8px] border border-input bg-background px-3.5 py-2.5 text-[0.93rem] outline-none focus-visible:border-ink"
               />
             )}
-            {field.help ? <span className="mt-1 block text-[0.75rem] text-muted-foreground">{field.help}</span> : null}
+            {field.help ? (
+              <span className="mt-1 block text-[0.75rem] text-muted-foreground">{field.help}</span>
+            ) : null}
           </label>
         ))}
       </div>

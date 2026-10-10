@@ -61,14 +61,14 @@ hosts mid-session logs you out.
 
 ## Decisions locked in
 
-| Decision | Choice | Why |
-| --- | --- | --- |
-| Backend | **Spring only.** Delete the TypeScript server functions once every page is proven. | Two parallel backends make future integrations hard, and the two copies had already drifted once (the test-call path). |
-| Auth transport | **Same-origin proxy + CSRF.** Not bearer-only. | Keeps the session cookie `HttpOnly`. Bearer would require a JS-readable token, trading CSRF risk for XSS token theft. |
-| CSRF | Cookie-to-header double submit: Spring sets a readable `XSRF-TOKEN`, the client echoes `X-XSRF-TOKEN`. | An attacker's origin cannot read our cookie, so it cannot forge the header. |
-| CSRF handler | Plain, **not** XOR, with `setCsrfRequestAttributeName(null)` for eager loading. | XOR blunts BREACH, which attacks a secret in a compressed *response body*. This API only moves the token via cookie and header, so masking buys nothing and would change the value every request. |
-| Customer `DELETE` | **owner + manager only.** Agents may still create/edit. | Deletion is destructive and irreversible. Mirrors `phone_numbers` and the policy tables. |
-| Role model | `agent` = read everything + edit operational data (`customers`). `owner`/`manager` = all configuration. | See `AccessService.MANAGER_ROLES`. |
+| Decision          | Choice                                                                                                  | Why                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend           | **Spring only.** Delete the TypeScript server functions once every page is proven.                      | Two parallel backends make future integrations hard, and the two copies had already drifted once (the test-call path).                                                                            |
+| Auth transport    | **Same-origin proxy + CSRF.** Not bearer-only.                                                          | Keeps the session cookie `HttpOnly`. Bearer would require a JS-readable token, trading CSRF risk for XSS token theft.                                                                             |
+| CSRF              | Cookie-to-header double submit: Spring sets a readable `XSRF-TOKEN`, the client echoes `X-XSRF-TOKEN`.  | An attacker's origin cannot read our cookie, so it cannot forge the header.                                                                                                                       |
+| CSRF handler      | Plain, **not** XOR, with `setCsrfRequestAttributeName(null)` for eager loading.                         | XOR blunts BREACH, which attacks a secret in a compressed _response body_. This API only moves the token via cookie and header, so masking buys nothing and would change the value every request. |
+| Customer `DELETE` | **owner + manager only.** Agents may still create/edit.                                                 | Deletion is destructive and irreversible. Mirrors `phone_numbers` and the policy tables.                                                                                                          |
+| Role model        | `agent` = read everything + edit operational data (`customers`). `owner`/`manager` = all configuration. | See `AccessService.MANAGER_ROLES`.                                                                                                                                                                |
 
 ---
 
@@ -99,11 +99,11 @@ An endpoint existing is not the same as it matching. `POST /api/business/provisi
 existed and was listed as ready, but diverged from `provisionWorkspace()` in
 three ways that would each have broken the dashboard's empty state:
 
-| | Server function | Spring, before | Fixed to |
-| --- | --- | --- | --- |
-| `companyName` | optional, defaults to `"<local-part>'s workspace"` | **required → 400** on the empty body the page posts | optional, same default |
-| Existing member | idempotent, `created: false` | **409 Conflict** | idempotent, `created: false` |
-| New workspace | seeds a disabled `Front desk agent` | no agent, no `email` | seeds both |
+|                 | Server function                                    | Spring, before                                      | Fixed to                     |
+| --------------- | -------------------------------------------------- | --------------------------------------------------- | ---------------------------- |
+| `companyName`   | optional, defaults to `"<local-part>'s workspace"` | **required → 400** on the empty body the page posts | optional, same default       |
+| Existing member | idempotent, `created: false`                       | **409 Conflict**                                    | idempotent, `created: false` |
+| New workspace   | seeds a disabled `Front desk agent`                | no agent, no `email`                                | seeds both                   |
 
 The second implementation in `BusinessService.provisionWorkspace` was deleted so
 only one provision path remains. **Diff the ported handler against the server
@@ -112,7 +112,7 @@ function before migrating a page onto it.**
 ### Two traps already hit — don't repeat them
 
 - **Proxy keys must be plain prefixes, not regexes.** Vite matches a regex key
-  against the path *and query string*, so `^/api/calls(/|$)` misses
+  against the path _and query string_, so `^/api/calls(/|$)` misses
   `/api/calls?businessId=…` and it 404s through to the app. Plain prefixes use
   `startsWith`.
 - **CORS must list both `localhost` and `127.0.0.1`.** Browsers send `Origin` on
@@ -127,25 +127,25 @@ function before migrating a page onto it.**
 All verified: role checks, CSRF on mutations, data matched against direct SQL,
 and confirmed in the browser network log.
 
-| Page | File(s) | Spring endpoints |
-| --- | --- | --- |
-| Analytics | `dashboard.analytics.tsx` | `GET /api/stats/analytics` |
-| Home | `dashboard.index.tsx` | `GET /api/stats/dashboard`, `/recent-calls` |
-| Call History | `dashboard.call-history.tsx` | `GET /api/calls`, `/api/calls/{callId}` |
-| Contacts | `components/dashboard/CrudSection.tsx` | `/api/records/customers` |
-| Knowledge Base | *(same `CrudSection`)* | `/api/records/business_policies`, `/agent_knowledge` |
-| Alerting | `dashboard.alerting.tsx` | `GET/POST /api/alerts`, `PATCH/DELETE /api/alerts/{id}` |
-| Phone Numbers | `dashboard.phone-numbers.tsx` | `/api/phone-numbers/**` + `GET /api/agents` |
-| **Agents** | `dashboard.agents.tsx`, `voice/FunctionsSection.tsx`, `voice/CallHistorySection.tsx`, `voice/PhoneNumbersSection.tsx` | `/api/agents/**`, `/api/agents/{id}/tools`, `/api/agents/tools/{toolId}`, `/api/calls/by-agent/{id}` |
-| **Live Monitoring** | `dashboard.live-monitoring.tsx` | `GET /api/calls?scope=active`, `POST /api/voice/monitor` |
-| **AI Quality** | `dashboard.ai-quality.tsx` | `GET /api/calls?scope=finished` |
-| **Settings** | `dashboard.settings.tsx` | `GET /api/business/team`, `PATCH /api/business/{id}` |
-| *(workspace layout)* | `_authenticated/dashboard.tsx` | `POST /api/business/provision` |
-| **Auth** | `routes/auth.tsx` | `POST /api/auth/signin`, `/signup`, `GET /api/auth/me` |
-| **Route guard** | `_authenticated/route.tsx` | `GET /api/auth/me` — runs on every protected navigation |
-| **Workspace context** | `lib/business/useBusiness.ts` | `GET /api/business/context` — read by every page |
-| **Sign out** | `components/dashboard/Shell.tsx` | `POST /api/auth/signout` |
-| **Browser test call** | `lib/voice/useVoiceSession.ts` | `POST /api/voice/test-call` |
+| Page                  | File(s)                                                                                                               | Spring endpoints                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Analytics             | `dashboard.analytics.tsx`                                                                                             | `GET /api/stats/analytics`                                                                           |
+| Home                  | `dashboard.index.tsx`                                                                                                 | `GET /api/stats/dashboard`, `/recent-calls`                                                          |
+| Call History          | `dashboard.call-history.tsx`                                                                                          | `GET /api/calls`, `/api/calls/{callId}`                                                              |
+| Contacts              | `components/dashboard/CrudSection.tsx`                                                                                | `/api/records/customers`                                                                             |
+| Knowledge Base        | _(same `CrudSection`)_                                                                                                | `/api/records/business_policies`, `/agent_knowledge`                                                 |
+| Alerting              | `dashboard.alerting.tsx`                                                                                              | `GET/POST /api/alerts`, `PATCH/DELETE /api/alerts/{id}`                                              |
+| Phone Numbers         | `dashboard.phone-numbers.tsx`                                                                                         | `/api/phone-numbers/**` + `GET /api/agents`                                                          |
+| **Agents**            | `dashboard.agents.tsx`, `voice/FunctionsSection.tsx`, `voice/CallHistorySection.tsx`, `voice/PhoneNumbersSection.tsx` | `/api/agents/**`, `/api/agents/{id}/tools`, `/api/agents/tools/{toolId}`, `/api/calls/by-agent/{id}` |
+| **Live Monitoring**   | `dashboard.live-monitoring.tsx`                                                                                       | `GET /api/calls?scope=active`, `POST /api/voice/monitor`                                             |
+| **AI Quality**        | `dashboard.ai-quality.tsx`                                                                                            | `GET /api/calls?scope=finished`                                                                      |
+| **Settings**          | `dashboard.settings.tsx`                                                                                              | `GET /api/business/team`, `PATCH /api/business/{id}`                                                 |
+| _(workspace layout)_  | `_authenticated/dashboard.tsx`                                                                                        | `POST /api/business/provision`                                                                       |
+| **Auth**              | `routes/auth.tsx`                                                                                                     | `POST /api/auth/signin`, `/signup`, `GET /api/auth/me`                                               |
+| **Route guard**       | `_authenticated/route.tsx`                                                                                            | `GET /api/auth/me` — runs on every protected navigation                                              |
+| **Workspace context** | `lib/business/useBusiness.ts`                                                                                         | `GET /api/business/context` — read by every page                                                     |
+| **Sign out**          | `components/dashboard/Shell.tsx`                                                                                      | `POST /api/auth/signout`                                                                             |
+| **Browser test call** | `lib/voice/useVoiceSession.ts`                                                                                        | `POST /api/voice/test-call`                                                                          |
 
 **Note:** Contacts and Knowledge Base share `CrudSection`, so migrating one
 moved both. `Settings` only imports the presentational `RecordForm` from that
@@ -161,8 +161,8 @@ Proxy prefixes currently routed to `:8080`:
 
 ### Pages still on server functions
 
-| Page / file | Server functions still used | Spring endpoint | Notes |
-| --- | --- | --- | --- |
+| Page / file                             | Server functions still used                                                | Spring endpoint | Notes                                                                                                                                                                                                                               |
+| --------------------------------------- | -------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Batch Call — `dashboard.batch-call.tsx` | `listAgentConfigs`, `listBatchJobs`, `createBatchJob`, `setBatchJobStatus` | `/api/batch/**` | **Deferred to P2, not part of this migration.** The controller exists, but `/api/batch` is unproxied and the page's whole point — dialling — has no backend (gap 2 below). Migrating it would move a feature that has never worked. |
 
 ### Auth — built and proven (Stages 1-3)
@@ -182,14 +182,16 @@ Path=/, 30 days.
 - `GET /api/auth/me` answers **204** for "nobody", matching `getCurrentUser`'s
   `null`. The shared client turns 204 into `undefined`, so every caller
   normalises with `?? null`.
-- Sign-out deletes only the current session's row. Ending *all* of a user's
+- Sign-out deletes only the current session's row. Ending _all_ of a user's
   sessions still needs F-05.
 - `app.session.secure-cookie` replaced the old `NODE_ENV` check and **must be
   true in production** (F-03).
 
 ### Gaps where Spring has no endpoint yet
-   (`src/lib/auth/password.server.ts`, mirrored in `scripts/db-init.mjs`) and
-   the cookie attributes matched.
+
+(`src/lib/auth/password.server.ts`, mirrored in `scripts/db-init.mjs`) and
+the cookie attributes matched.
+
 1. **Outbound calling** — `createOutboundCall` has no Spring equivalent.
    `/api/voice` has only `/monitor` and `/test-call`. This is what defers Batch
    to P2: the batch dialer depends on it, and nothing consumes
@@ -222,6 +224,7 @@ Verified empirically with a real `agent`-role user: reads 200, all config writes
 403, owner unaffected, cross-tenant attempts 403.
 
 **Still open: 5 Medium, 7 Low.** Highest value next:
+
 - **F-03** (Medium) — session cookie `Secure` flag depends on `NODE_ENV`; a
   deployment without it silently ships cookies over plaintext.
 - **F-05** (Medium) — no bulk session revocation ("sign out everywhere").
@@ -270,12 +273,12 @@ second test-call implementation to drift.
 
 ### Still on disk, and why
 
-| File | Why it stays |
-| --- | --- |
-| `voice/batch.functions.ts` | Batch Call still calls it (P2). |
-| `voice/agent-configs.functions.ts` | **Batch imports `listAgentConfigs` as a value**, not a type — it was on the Tier 1 list but is not deletable. Its `AgentConfigRow` type is also still imported by Phone Numbers. |
-| `voice/outbound.functions.ts` | `createOutboundCall` has no Spring equivalent; deleting it removes outbound calling. |
-| `routes/api/public/telephony/exotel.ts` | The webhook is still Node-only. Porting it needs F-15 first. |
+| File                                    | Why it stays                                                                                                                                                                     |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `voice/batch.functions.ts`              | Batch Call still calls it (P2).                                                                                                                                                  |
+| `voice/agent-configs.functions.ts`      | **Batch imports `listAgentConfigs` as a value**, not a type — it was on the Tier 1 list but is not deletable. Its `AgentConfigRow` type is also still imported by Phone Numbers. |
+| `voice/outbound.functions.ts`           | `createOutboundCall` has no Spring equivalent; deleting it removes outbound calling.                                                                                             |
+| `routes/api/public/telephony/exotel.ts` | The webhook is still Node-only. Porting it needs F-15 first.                                                                                                                     |
 
 ### Tier 2 — deferred to post-P2
 
@@ -285,9 +288,9 @@ server functions import `requireAuth`, the access helpers and the pool. They
 become deletable only once Batch is migrated and outbound calling exists in
 Spring — that is, after P2, not as a follow-up to this cleanup.
 
-- [ ] *(post-P2)* Delete the last three `*.functions.ts` and `src/lib/db/pg.server.ts`
-- [ ] *(post-P2)* Delete `src/lib/auth/session.server.ts`, `password.server.ts`, `middleware.ts`, `access.ts`
-- [ ] *(post-P2)* Drop `pg` and `@types/pg` from `package.json`
+- [ ] _(post-P2)_ Delete the last three `*.functions.ts` and `src/lib/db/pg.server.ts`
+- [ ] _(post-P2)_ Delete `src/lib/auth/session.server.ts`, `password.server.ts`, `middleware.ts`, `access.ts`
+- [ ] _(post-P2)_ Drop `pg` and `@types/pg` from `package.json`
 - [x] Delete `db/convert-from-supabase.sql` and its branch in `scripts/db-init.mjs`.
       Dead since the baseline was recorded in `schema_migrations` — the branch
       only fires on a database built by the pre-migration Supabase schema, and

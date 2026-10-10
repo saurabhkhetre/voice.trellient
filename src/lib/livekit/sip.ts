@@ -25,17 +25,14 @@ function getRoomService(): RoomServiceClient | null {
 }
 
 /** Create a LiveKit room with structured metadata. */
-export async function createRoom(
-  roomName: string,
-  metadata: Record<string, unknown>,
-): Promise<void> {
+export async function createRoom(roomName: string, metadata: Record<string, unknown>): Promise<void> {
   const svc = getRoomService();
   if (!svc) throw new Error("LiveKit is not configured.");
 
   await svc.createRoom({
     name: roomName,
     metadata: JSON.stringify(metadata),
-    emptyTimeout: 300,   // auto-close after 5 min if empty
+    emptyTimeout: 300, // auto-close after 5 min if empty
     maxParticipants: 10,
   });
 }
@@ -138,9 +135,7 @@ export async function createInboundTrunk(config: InboundTrunkConfig): Promise<st
   const sip = getSipClient();
   if (!sip) throw new Error("LiveKit is not configured.");
   if (config.allowedAddresses.length === 0) {
-    throw new Error(
-      "An inbound trunk needs allowedAddresses, or it accepts SIP from anywhere.",
-    );
+    throw new Error("An inbound trunk needs allowedAddresses, or it accepts SIP from anywhere.");
   }
 
   const trunk = await sip.createSipInboundTrunk(config.name, config.allowedNumbers, {

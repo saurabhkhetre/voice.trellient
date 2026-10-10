@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bot, PlusCircle, Sparkles } from "lucide-react";
 
@@ -86,8 +86,7 @@ function VoiceAgentDashboard() {
     queryKey: ["voice-catalog", businessId],
     enabled: Boolean(businessId),
     staleTime: Infinity,
-    queryFn: () =>
-      apiGet<VoiceProvider[]>("/agents/voice-catalog", { businessId: businessId! }),
+    queryFn: () => apiGet<VoiceProvider[]>("/agents/voice-catalog", { businessId: businessId! }),
   });
 
   const agents = useQuery({
@@ -132,8 +131,7 @@ function VoiceAgentDashboard() {
       if (!businessId) throw new Error("Your workspace is still loading. Please try again.");
       // Spring: POST /api/agents to create, then PATCH /api/agents/{id} with
       // the draft as the body. Both are owner/manager only.
-      const agentConfigId =
-        selected?.id ?? (await apiPost<{ id: string }>("/agents", { businessId })).id;
+      const agentConfigId = selected?.id ?? (await apiPost<{ id: string }>("/agents", { businessId })).id;
       await apiPatch<void>(`/agents/${agentConfigId}`, draft);
     },
     onSuccess: () => {
@@ -226,8 +224,8 @@ function VoiceAgentDashboard() {
             Voice Agent Dashboard
           </h1>
           <p className="measure mt-2 text-[0.95rem] text-muted-foreground">
-            Build, tune and publish the agent that answers your phone — prompt, voice, guardrails and live call
-            metrics in one place.
+            Build, tune and publish the agent that answers your phone — prompt, voice, guardrails and live
+            call metrics in one place.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -235,10 +233,14 @@ function VoiceAgentDashboard() {
             <span className="text-[0.78rem] text-muted-foreground">
               v{selected.version ?? 1}
               {selected.is_draft ? " · draft" : ""}
-              {selected.published_at ? ` · published ${new Date(selected.published_at).toLocaleDateString()}` : ""}
+              {selected.published_at
+                ? ` · published ${new Date(selected.published_at).toLocaleDateString()}`
+                : ""}
             </span>
           )}
-          <Pill tone={bool("enabled") ? "good" : "warn"}>{bool("enabled") ? "Answering calls" : "Paused"}</Pill>
+          <Pill tone={bool("enabled") ? "good" : "warn"}>
+            {bool("enabled") ? "Answering calls" : "Paused"}
+          </Pill>
           <button
             type="button"
             onClick={() => save.mutate()}
@@ -311,7 +313,9 @@ function VoiceAgentDashboard() {
                   onClick={() => setTab(t)}
                   className={cn(
                     "-mb-px border-b-2 px-3 py-2 text-[0.85rem] transition-colors",
-                    tab === t ? "border-ink text-ink" : "border-transparent text-muted-foreground hover:text-ink",
+                    tab === t
+                      ? "border-ink text-ink"
+                      : "border-transparent text-muted-foreground hover:text-ink",
                   )}
                 >
                   {t}
@@ -326,13 +330,21 @@ function VoiceAgentDashboard() {
                     <Textarea value={str("greeting")} onChange={(v) => set("greeting", v)} rows={3} />
                   </Field>
                   <Field label="System prompt" help="Behaviour, boundaries and tone during the call.">
-                    <Textarea value={str("system_instructions")} onChange={(v) => set("system_instructions", v)} rows={8} />
+                    <Textarea
+                      value={str("system_instructions")}
+                      onChange={(v) => set("system_instructions", v)}
+                      rows={8}
+                    />
                   </Field>
                   <Field label="Personality">
                     <Textarea value={str("personality")} onChange={(v) => set("personality", v)} rows={3} />
                   </Field>
                   <Field label="How to describe the business">
-                    <Textarea value={str("business_description")} onChange={(v) => set("business_description", v)} rows={3} />
+                    <Textarea
+                      value={str("business_description")}
+                      onChange={(v) => set("business_description", v)}
+                      rows={3}
+                    />
                   </Field>
                 </>
               ) : null}
@@ -368,9 +380,7 @@ function VoiceAgentDashboard() {
                     <Field
                       label="Realtime model"
                       help={
-                        activeProvider
-                          ? `Models ${activeProvider.label} can run.`
-                          : "Loading the model list…"
+                        activeProvider ? `Models ${activeProvider.label} can run.` : "Loading the model list…"
                       }
                     >
                       <select
@@ -426,12 +436,18 @@ function VoiceAgentDashboard() {
                         type="number"
                         step="0.05"
                         value={str("voice_speed")}
-                        onChange={(e) => set("voice_speed", e.target.value === "" ? null : Number(e.target.value))}
+                        onChange={(e) =>
+                          set("voice_speed", e.target.value === "" ? null : Number(e.target.value))
+                        }
                         className="input-base"
                       />
                     </Field>
                   </div>
-                  <Toggle label="Answer incoming calls" value={bool("enabled")} onChange={(v) => set("enabled", v)} />
+                  <Toggle
+                    label="Answer incoming calls"
+                    value={bool("enabled")}
+                    onChange={(v) => set("enabled", v)}
+                  />
                 </>
               ) : null}
 
@@ -469,13 +485,23 @@ function VoiceAgentDashboard() {
                     <input
                       type="number"
                       value={str("max_call_seconds")}
-                      onChange={(e) => set("max_call_seconds", e.target.value === "" ? null : Number(e.target.value))}
+                      onChange={(e) =>
+                        set("max_call_seconds", e.target.value === "" ? null : Number(e.target.value))
+                      }
                       className="input-base"
                     />
                   </Field>
-                  <Toggle label="Record calls" value={bool("recording_enabled")} onChange={(v) => set("recording_enabled", v)} />
+                  <Toggle
+                    label="Record calls"
+                    value={bool("recording_enabled")}
+                    onChange={(v) => set("recording_enabled", v)}
+                  />
                   <Field label="After-hours reply">
-                    <Textarea value={str("after_hours_response")} onChange={(v) => set("after_hours_response", v)} rows={3} />
+                    <Textarea
+                      value={str("after_hours_response")}
+                      onChange={(v) => set("after_hours_response", v)}
+                      rows={3}
+                    />
                   </Field>
                 </>
               ) : null}
@@ -488,11 +514,15 @@ function VoiceAgentDashboard() {
                     onChange={(v) => set("escalation_enabled", v)}
                   />
                   <Field label="When to escalate">
-                    <Textarea value={str("escalation_rules")} onChange={(v) => set("escalation_rules", v)} rows={6} />
+                    <Textarea
+                      value={str("escalation_rules")}
+                      onChange={(v) => set("escalation_rules", v)}
+                      rows={6}
+                    />
                   </Field>
                   <p className="text-[0.85rem] text-muted-foreground">
-                    Discounts, price floors and opening hours are enforced by your pricing rules and business hours —
-                    the agent cannot talk its way past them.
+                    Discounts, price floors and opening hours are enforced by your pricing rules and business
+                    hours — the agent cannot talk its way past them.
                   </p>
                 </>
               ) : null}
@@ -502,10 +532,7 @@ function VoiceAgentDashboard() {
 
         {/* Right rail */}
         <div className="space-y-5">
-          <TestCallPanel
-            agentId={selected?.id ?? null}
-            agentName={String(draft["name"] ?? "your agent")}
-          />
+          <TestCallPanel agentId={selected?.id ?? null} agentName={String(draft["name"] ?? "your agent")} />
 
           <Panel className="p-5">
             <p className="text-[0.72rem] uppercase tracking-[0.2em] text-muted-foreground">Runtime</p>
@@ -552,7 +579,15 @@ function Textarea({ value, onChange, rows }: { value: string; onChange: (v: stri
   );
 }
 
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       type="button"

@@ -118,7 +118,10 @@ function parseArgs(argv) {
     if (!flag.startsWith("--")) continue;
     const value = argv[i + 1];
     if (!value || value.startsWith("--")) continue;
-    out[flag.slice(2)] = value.split(",").map((v) => v.trim()).filter(Boolean);
+    out[flag.slice(2)] = value
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
     i += 1;
   }
   return out;

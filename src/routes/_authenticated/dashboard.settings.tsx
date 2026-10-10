@@ -81,7 +81,9 @@ function SettingsPage() {
             {team.data!.map((member) => (
               <li key={member.id} className="flex items-center justify-between px-5 py-4">
                 <span className="text-[0.88rem] text-ink">
-                  {member.authUserId === ctx.userId ? `${ctx.email ?? "Your account"} (you)` : member.authUserId}
+                  {member.authUserId === ctx.userId
+                    ? `${ctx.email ?? "Your account"} (you)`
+                    : member.authUserId}
                 </span>
                 <Pill tone={member.role === "owner" ? "good" : "neutral"}>{member.role}</Pill>
               </li>
@@ -93,9 +95,9 @@ function SettingsPage() {
       <Panel className="mt-6 px-5 py-5">
         <h2 className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">Telephony</h2>
         <p className="measure mt-3 text-[0.9rem] text-muted-foreground">
-          The agent runtime connects to a phone number through a telephony provider. Exotel is wired and waiting for
-          credentials — once your account is ready, we point your number at the Trellient webhook and calls start
-          landing here.
+          The agent runtime connects to a phone number through a telephony provider. Exotel is wired and
+          waiting for credentials — once your account is ready, we point your number at the Trellient webhook
+          and calls start landing here.
         </p>
       </Panel>
     </div>

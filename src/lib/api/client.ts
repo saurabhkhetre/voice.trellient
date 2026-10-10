@@ -104,10 +104,7 @@ function withQuery(path: string, params?: Record<string, string | number | undef
 }
 
 /** GET /api{path}, with undefined query params dropped. */
-export function apiGet<T>(
-  path: string,
-  params?: Record<string, string | number | undefined>,
-): Promise<T> {
+export function apiGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   return request<T>(withQuery(path, params));
 }
 
@@ -130,9 +127,6 @@ export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 }
 
 /** DELETE /api{path}. Carries the CSRF header. */
-export function apiDelete<T>(
-  path: string,
-  params?: Record<string, string | number | undefined>,
-): Promise<T> {
+export function apiDelete<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   return request<T>(withQuery(path, params), { method: "DELETE" });
 }

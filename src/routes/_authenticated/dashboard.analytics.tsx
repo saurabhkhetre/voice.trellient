@@ -48,7 +48,9 @@ function AnalyticsPage() {
             className="rounded-[8px] border border-line bg-card px-3 py-2 text-[0.85rem] text-ink outline-none focus:border-ink"
           >
             {TIME_RANGES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
             ))}
           </select>
         }
@@ -58,8 +60,16 @@ function AnalyticsPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Calls" value={d ? String(d.totalCalls) : "—"} />
         <StatCard label="Avg. Handle Time" value={d?.avgDuration ? formatDuration(d.avgDuration) : "—"} />
-        <StatCard label="Containment" value={d ? `${d.containmentRate}%` : "—"} hint="Calls resolved without escalation" />
-        <StatCard label="Escalation Rate" value={d ? `${d.escalationRate}%` : "—"} hint={d ? `${d.escalationCount} escalated` : ""} />
+        <StatCard
+          label="Containment"
+          value={d ? `${d.containmentRate}%` : "—"}
+          hint="Calls resolved without escalation"
+        />
+        <StatCard
+          label="Escalation Rate"
+          value={d ? `${d.escalationRate}%` : "—"}
+          hint={d ? `${d.escalationCount} escalated` : ""}
+        />
       </div>
 
       {/* Call breakdown */}
@@ -84,7 +94,9 @@ function AnalyticsPage() {
                 <p className="mt-1 font-display text-[1.4rem] tracking-tight text-ink">{d.failedCalls}</p>
               </div>
               <div className="rounded-[10px] bg-secondary/50 p-4">
-                <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Total Minutes</p>
+                <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">
+                  Total Minutes
+                </p>
                 <p className="mt-1 font-display text-[1.4rem] tracking-tight text-ink">{d.totalMinutes}</p>
               </div>
             </div>
@@ -101,11 +113,15 @@ function AnalyticsPage() {
               <div className="mt-5 flex items-end gap-8">
                 <div>
                   <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Inbound</p>
-                  <p className="mt-1 font-display text-[2rem] tracking-tight text-ink">{d.callsByDirection.inbound}</p>
+                  <p className="mt-1 font-display text-[2rem] tracking-tight text-ink">
+                    {d.callsByDirection.inbound}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[0.72rem] uppercase tracking-[0.15em] text-muted-foreground">Outbound</p>
-                  <p className="mt-1 font-display text-[2rem] tracking-tight text-ink">{d.callsByDirection.outbound}</p>
+                  <p className="mt-1 font-display text-[2rem] tracking-tight text-ink">
+                    {d.callsByDirection.outbound}
+                  </p>
                 </div>
               </div>
               {/* Direction bar */}
@@ -118,8 +134,14 @@ function AnalyticsPage() {
                 )}
               </div>
               <div className="mt-1.5 flex justify-between text-[0.72rem] text-muted-foreground">
-                <span>Inbound {d.totalCalls > 0 ? Math.round((d.callsByDirection.inbound / d.totalCalls) * 100) : 0}%</span>
-                <span>Outbound {d.totalCalls > 0 ? Math.round((d.callsByDirection.outbound / d.totalCalls) * 100) : 0}%</span>
+                <span>
+                  Inbound{" "}
+                  {d.totalCalls > 0 ? Math.round((d.callsByDirection.inbound / d.totalCalls) * 100) : 0}%
+                </span>
+                <span>
+                  Outbound{" "}
+                  {d.totalCalls > 0 ? Math.round((d.callsByDirection.outbound / d.totalCalls) * 100) : 0}%
+                </span>
               </div>
             </>
           )}

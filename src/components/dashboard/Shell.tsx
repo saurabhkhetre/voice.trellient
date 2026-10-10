@@ -143,7 +143,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <aside className="sticky top-0 hidden h-screen w-[var(--sidebar-w)] shrink-0 flex-col border-r border-line bg-surface px-3 py-5 lg:flex">
           <Link to="/dashboard" className="flex items-center gap-2.5 rounded-md px-2 py-1">
             <span className="flex size-6 items-center justify-center rounded-[6px] bg-accent-solid">
-              <svg viewBox="0 0 24 24" className="size-[0.95rem] text-white" fill="none" stroke="currentColor" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                className="size-[0.95rem] text-white"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
                 <path strokeWidth="2" strokeLinecap="round" d="M4 6h16M12 6v12M7 10.5h10M9 15h6" />
               </svg>
             </span>
@@ -216,7 +222,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             </div>
           </header>
           {open ? (
-            <nav aria-label="Dashboard" className="grid gap-0.5 border-b border-line bg-card px-4 py-3 lg:hidden">
+            <nav
+              aria-label="Dashboard"
+              className="grid gap-0.5 border-b border-line bg-card px-4 py-3 lg:hidden"
+            >
               {DASHBOARD_NAV.map((entry) =>
                 isGroup(entry) ? (
                   <div key={entry.label}>
@@ -245,11 +254,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
         {/* Conductor panel — lazy-loaded to reduce main bundle */}
         {conductorOpen ? (
-          <Suspense fallback={
-            <aside className="sticky top-0 hidden h-screen w-[22rem] shrink-0 items-center justify-center border-l border-line bg-card lg:flex">
-              <p className="text-[0.88rem] text-muted-foreground">Loading Conductor…</p>
-            </aside>
-          }>
+          <Suspense
+            fallback={
+              <aside className="sticky top-0 hidden h-screen w-[22rem] shrink-0 items-center justify-center border-l border-line bg-card lg:flex">
+                <p className="text-[0.88rem] text-muted-foreground">Loading Conductor…</p>
+              </aside>
+            }
+          >
             <LazyConductorPanel onClose={() => setConductorOpen(false)} />
           </Suspense>
         ) : null}
@@ -260,9 +271,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
 /* ---------- Conductor AI assistant panel (lazy-loaded) ---------- */
 
-const LazyConductorPanel = lazy(() =>
-  Promise.resolve({ default: ConductorPanel }),
-);
+const LazyConductorPanel = lazy(() => Promise.resolve({ default: ConductorPanel }));
 
 /**
  * Conductor is not built. This panel describes what it is meant to do and
@@ -290,15 +299,13 @@ function ConductorPanel({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-y-auto px-5 py-6">
         <Pill tone="neutral">Not available yet</Pill>
         <p className="mt-4 text-[0.88rem] leading-relaxed text-muted-foreground">
-          Conductor is planned as a way to set an agent up by describing it, or
-          by pointing it at your website and letting it read the site to draft a
-          prompt and configuration.
+          Conductor is planned as a way to set an agent up by describing it, or by pointing it at your website
+          and letting it read the site to draft a prompt and configuration.
         </p>
         <p className="mt-3 text-[0.88rem] leading-relaxed text-muted-foreground">
-          It is not built, so there is nothing to type into yet. In the meantime
-          the same settings are all editable by hand under{" "}
-          <span className="text-ink">Agents</span> — prompt, voice, guardrails
-          and tools.
+          It is not built, so there is nothing to type into yet. In the meantime the same settings are all
+          editable by hand under <span className="text-ink">Agents</span> — prompt, voice, guardrails and
+          tools.
         </p>
       </div>
     </aside>
@@ -323,9 +330,7 @@ export function PageHeader({
       <div>
         {eyebrow ? <p className="label-caps">{eyebrow}</p> : null}
         <h1 className="text-display mt-2.5 text-text-primary">{title}</h1>
-        {description ? (
-          <p className="measure mt-2.5 text-body text-text-secondary">{description}</p>
-        ) : null}
+        {description ? <p className="measure mt-2.5 text-body text-text-secondary">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -381,7 +386,13 @@ export function StatCard({
   );
 }
 
-export function Pill({ tone = "neutral", children }: { tone?: "neutral" | "good" | "warn" | "bad"; children: ReactNode }) {
+export function Pill({
+  tone = "neutral",
+  children,
+}: {
+  tone?: "neutral" | "good" | "warn" | "bad";
+  children: ReactNode;
+}) {
   return (
     <span
       className={cn(

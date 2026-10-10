@@ -107,7 +107,9 @@ export function PhoneNumbersSection({
               </span>
               <select
                 value={row.agentConfigId ?? ""}
-                onChange={(e) => update.mutate({ id: row.id, patch: { agentConfigId: e.target.value || null } })}
+                onChange={(e) =>
+                  update.mutate({ id: row.id, patch: { agentConfigId: e.target.value || null } })
+                }
                 className="input-base w-auto py-1.5 text-[0.8rem]"
               >
                 <option value="">Unassigned</option>

@@ -18,7 +18,11 @@ const CONDITION_TYPES = [
   { value: "drop_rate", label: "Call Drop Rate", description: "Triggers when drop rate exceeds threshold" },
   { value: "error_count", label: "Error Count", description: "Triggers when error count exceeds threshold" },
   { value: "escalation", label: "Escalation", description: "Triggers on any human escalation" },
-  { value: "latency", label: "High Latency", description: "Triggers when response latency exceeds threshold" },
+  {
+    value: "latency",
+    label: "High Latency",
+    description: "Triggers when response latency exceeds threshold",
+  },
   { value: "custom", label: "Custom", description: "Define your own trigger condition" },
 ];
 
@@ -149,7 +153,9 @@ function AlertingPage() {
                 className="input-base mt-2"
               >
                 {CONDITION_TYPES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
                 ))}
               </select>
             </label>
@@ -159,7 +165,13 @@ function AlertingPage() {
                 <input
                   value={newThreshold}
                   onChange={(e) => setNewThreshold(e.target.value)}
-                  placeholder={newConditionType === "drop_rate" ? "5 (%)" : newConditionType === "latency" ? "2000 (ms)" : "10"}
+                  placeholder={
+                    newConditionType === "drop_rate"
+                      ? "5 (%)"
+                      : newConditionType === "latency"
+                        ? "2000 (ms)"
+                        : "10"
+                  }
                   className="input-base mt-2"
                 />
               </label>
@@ -227,7 +239,11 @@ function AlertingPage() {
                     aria-label={rule.enabled ? "Turn rule off" : "Turn rule on"}
                     className="text-muted-foreground hover:text-ink disabled:opacity-50"
                   >
-                    {rule.enabled ? <ToggleRight className="size-5 text-ink" /> : <ToggleLeft className="size-5" />}
+                    {rule.enabled ? (
+                      <ToggleRight className="size-5 text-ink" />
+                    ) : (
+                      <ToggleLeft className="size-5" />
+                    )}
                   </button>
                   <button
                     type="button"

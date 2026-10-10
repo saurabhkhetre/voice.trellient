@@ -27,18 +27,90 @@ type Integration = {
 };
 
 const INTEGRATIONS: Integration[] = [
-  { id: "salesforce", name: "Salesforce", description: "Sync contacts, leads, and call logs with Salesforce CRM.", category: "CRM", icon: "☁️" },
-  { id: "hubspot", name: "HubSpot", description: "Push call data, contacts, and deal updates to HubSpot.", category: "CRM", icon: "🟠" },
-  { id: "zoho", name: "Zoho CRM", description: "Connect with Zoho for lead management and call tracking.", category: "CRM", icon: "🔴" },
-  { id: "twilio", name: "Twilio", description: "Use Twilio as your telephony provider for inbound and outbound calls.", category: "Communication", icon: "📞" },
-  { id: "exotel", name: "Exotel", description: "Indian telephony provider for local numbers and IVR routing.", category: "Communication", icon: "📱" },
-  { id: "whatsapp", name: "WhatsApp Business", description: "Send follow-up messages and chat via WhatsApp Business API.", category: "Communication", icon: "💬" },
-  { id: "calendly", name: "Calendly", description: "Let your AI agent book appointments directly into Calendly.", category: "Scheduling", icon: "📅" },
-  { id: "cal", name: "Cal.com", description: "Open-source scheduling integration for appointment booking.", category: "Scheduling", icon: "🗓️" },
-  { id: "zapier", name: "Zapier", description: "Connect to 5000+ apps with triggers and actions from your voice agent.", category: "Automation", icon: "⚡" },
-  { id: "make", name: "Make (Integromat)", description: "Visual automation workflows triggered by call events.", category: "Automation", icon: "🔧" },
-  { id: "webhook", name: "Custom Webhook", description: "Send call events, transcripts, and summaries to any URL.", category: "Automation", icon: "🔗" },
-  { id: "ga4", name: "Google Analytics", description: "Track call conversions and agent performance in GA4.", category: "Analytics", icon: "📊" },
+  {
+    id: "salesforce",
+    name: "Salesforce",
+    description: "Sync contacts, leads, and call logs with Salesforce CRM.",
+    category: "CRM",
+    icon: "☁️",
+  },
+  {
+    id: "hubspot",
+    name: "HubSpot",
+    description: "Push call data, contacts, and deal updates to HubSpot.",
+    category: "CRM",
+    icon: "🟠",
+  },
+  {
+    id: "zoho",
+    name: "Zoho CRM",
+    description: "Connect with Zoho for lead management and call tracking.",
+    category: "CRM",
+    icon: "🔴",
+  },
+  {
+    id: "twilio",
+    name: "Twilio",
+    description: "Use Twilio as your telephony provider for inbound and outbound calls.",
+    category: "Communication",
+    icon: "📞",
+  },
+  {
+    id: "exotel",
+    name: "Exotel",
+    description: "Indian telephony provider for local numbers and IVR routing.",
+    category: "Communication",
+    icon: "📱",
+  },
+  {
+    id: "whatsapp",
+    name: "WhatsApp Business",
+    description: "Send follow-up messages and chat via WhatsApp Business API.",
+    category: "Communication",
+    icon: "💬",
+  },
+  {
+    id: "calendly",
+    name: "Calendly",
+    description: "Let your AI agent book appointments directly into Calendly.",
+    category: "Scheduling",
+    icon: "📅",
+  },
+  {
+    id: "cal",
+    name: "Cal.com",
+    description: "Open-source scheduling integration for appointment booking.",
+    category: "Scheduling",
+    icon: "🗓️",
+  },
+  {
+    id: "zapier",
+    name: "Zapier",
+    description: "Connect to 5000+ apps with triggers and actions from your voice agent.",
+    category: "Automation",
+    icon: "⚡",
+  },
+  {
+    id: "make",
+    name: "Make (Integromat)",
+    description: "Visual automation workflows triggered by call events.",
+    category: "Automation",
+    icon: "🔧",
+  },
+  {
+    id: "webhook",
+    name: "Custom Webhook",
+    description: "Send call events, transcripts, and summaries to any URL.",
+    category: "Automation",
+    icon: "🔗",
+  },
+  {
+    id: "ga4",
+    name: "Google Analytics",
+    description: "Track call conversions and agent performance in GA4.",
+    category: "Analytics",
+    icon: "📊",
+  },
 ];
 
 const CATEGORIES = ["All", "CRM", "Communication", "Scheduling", "Automation", "Analytics"] as const;
@@ -46,8 +118,7 @@ const CATEGORIES = ["All", "CRM", "Communication", "Scheduling", "Automation", "
 function IntegrationsPage() {
   const [filter, setFilter] = useState<string>("All");
 
-  const filtered =
-    filter === "All" ? INTEGRATIONS : INTEGRATIONS.filter((i) => i.category === filter);
+  const filtered = filter === "All" ? INTEGRATIONS : INTEGRATIONS.filter((i) => i.category === filter);
 
   return (
     <div>
@@ -59,9 +130,8 @@ function IntegrationsPage() {
       <Panel className="mb-6 flex items-start gap-3 px-5 py-4">
         <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <p className="text-[0.88rem] leading-relaxed text-muted-foreground">
-          None of these are available yet — this is what we plan to build, not
-          what you can switch on today. To connect a phone number now, use{" "}
-          <span className="text-ink">Phone Numbers</span>, which is the one
+          None of these are available yet — this is what we plan to build, not what you can switch on today.
+          To connect a phone number now, use <span className="text-ink">Phone Numbers</span>, which is the one
           telephony path that is actually wired.
         </p>
       </Panel>
